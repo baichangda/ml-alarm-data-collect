@@ -1,0 +1,4 @@
+rootProject.name = 'ml-alarm-data-collect'
+include 'Base'
+include 'MongoDB'
+

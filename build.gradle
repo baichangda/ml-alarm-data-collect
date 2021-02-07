@@ -1,0 +1,110 @@
+buildscript {
+    ext {
+        springBootVersion = '+'
+        lombokVersion="+"
+        mavenRepoUrl='https://maven.aliyun.com/repository/central'
+    }
+
+    repositories {
+        mavenLocal()
+        maven { url "${mavenRepoUrl}" }
+        mavenCentral()
+    }
+
+    dependencies {
+        //使用springboot框架
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+    }
+}
+
+/**
+ * ----------------------------------------------------------------------------
+ */
+
+//所有模块配置
+allprojects{
+    group 'com.bcd'
+    version '1.0'
+    apply plugin: 'java'
+    apply plugin: 'idea'
+    //加入maven发布依赖
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'org.springframework.boot'
+
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+
+    repositories {
+        mavenLocal()
+        maven { url "${mavenRepoUrl}" }
+        maven { url "https://jitpack.io" }
+//        maven { url "${incarMavenRepoUrl}" }
+        mavenCentral()
+    }
+
+    //下载源码和文档
+    //gradle cleanIdea idea
+    idea {
+        module {
+            downloadSources=true
+            downloadJavadoc=true
+        }
+    }
+    dependencies{
+        // https://mvnrepository.com/artifact/org.projectlombok/lombok
+        compileOnly  group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
+        annotationProcessor group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
+
+    }
+
+    //生成jar时打包源码
+    task sourceJar(type: Jar) {
+        from sourceSets.main.java.srcDirs
+        classifier "sources"
+    }
+
+    jar {
+        enabled = true
+    }
+
+}
+
+
+/**
+ * ----------------------------------------------------------------------------
+ */
+
+/**
+ * SpringBoot 2开始,使用gradle bootJar进行打包,并要配置入口类
+ */
+bootJar {
+    manifest {
+        attributes 'Start-Class': 'com.bcd.Application'
+    }
+}
+
+bootRun {
+    /**
+     * 启动时候带入jvm的参数;如下(启动jvisualvm监控)
+     * nohup gradle bootRun -PjvmArgs="-Djava.rmi.server.hostname=172.16.24.36 -Dcom.sun.management.jmxremote.port=10001 -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.authenticate=true" &
+     */
+    List args=new ArrayList<>();
+    if (project.hasProperty('jvmArgs')) {
+        args.addAll(project.jvmArgs.split("\\s+") as List)
+    }
+    //开启缓存行补齐
+    args.add('-XX:-RestrictContended')
+    args.add('-Dfile.encoding=UTF-8')
+
+    jvmArgs(args)
+}
+
+
+
+/**
+ * ----------------------------------------------------------------------------
+ */
+
+dependencies {
+    compile project(':MongoDB')
+}

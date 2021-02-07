@@ -1,0 +1,17 @@
+*.class
+*.iml
+*.log
+*.log.*
+*.lst
+
+.gradle/
+.idea/
+
+**/build/
+**/target/
+**/out/
+**/node_modules/
+**/*-dev.yml
+**/*-test.yml
+
+.DS_Store

@@ -1,0 +1,29 @@
+server:
+  port: 9999
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,application/xhtml+xml,text/html,text/xml,text/plain
+    min-response-size: 1024
+  servlet:
+    session:
+      timeout: 1800
+spring:
+   servlet:
+     multipart:
+       max-file-size: 10MB
+   web:
+     resources:
+       chain:
+         cache: false
+   profiles.active: dev
+   freemarker:
+     checkTemplateLocation: false
+
+#  mongodb配置
+   data.mongodb.uri: mongodb://10.0.11.50:27017/ai
+
+  #  i18n资源文件配置
+   messages:
+      basename: i18n/base/messages,i18n/main/messages,i18n/mongodb/messages
+      encoding: UTF-8
+      cache-duration: -1
