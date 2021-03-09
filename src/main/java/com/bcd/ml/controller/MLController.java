@@ -30,4 +30,11 @@ public class MLController extends BaseController {
     public JsonMessage<Integer> collectWithAvg(@ApiParam @RequestParam String collectionName){
         return JsonMessage.success().withData(collectService.collectWithAvg(collectionName));
     }
+
+    @ApiOperation(value = "整合报警数据(字段扩展)", notes = "整合报警数据(字段扩展)")
+    @ApiResponse(code = 200, message = "整合数据条数")
+    @GetMapping("/api/ml/collectWithExtFields")
+    public JsonMessage<Integer> collectWithExtFields(@ApiParam @RequestParam String collectionName){
+        return JsonMessage.success().withData(collectService.collectWithExtFields(collectionName));
+    }
 }

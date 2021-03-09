@@ -1,7 +1,7 @@
 buildscript {
     ext {
-        springBootVersion = '+'
-        lombokVersion="+"
+        springBootVersion = '2.4.3'
+        lombokVersion="1.18.18"
         mavenRepoUrl='https://maven.aliyun.com/repository/central'
     }
 

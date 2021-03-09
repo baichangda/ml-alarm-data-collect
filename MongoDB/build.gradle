@@ -9,6 +9,6 @@ dependencies {
 }
 buildscript {
     ext {
-        freemarkerVersion = '+'
+        freemarkerVersion = '2.3.31'
     }
 }
