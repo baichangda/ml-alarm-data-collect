@@ -33,3 +33,12 @@ springdoc:
     - com.bcd
   swagger-ui:
     path: /swagger-ui.html
+
+
+
+
+hbase:
+  zookeeper:
+    quorum: 10.0.11.34,10.0.11.33,10.0.11.38
+    property:
+      clientPort: 2181

@@ -39,7 +39,7 @@ allprojects{
     repositories {
         mavenLocal()
         maven { url "${mavenRepoUrl}" }
-        mavenCentral()
+        maven { url 'https://repository.cloudera.com/artifactory/cloudera-repos/' }
     }
 
     //下载源码和文档
@@ -64,6 +64,12 @@ allprojects{
         // https://mvnrepository.com/artifact/org.projectlombok/lombok
         compileOnly group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
         annotationProcessor group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
+
+        compile("org.apache.hbase:hbase-client:1.2.0-cdh5.13.1"){
+            exclude module: "servlet-api"
+            exclude module: "slf4j-log4j12"
+            exclude module: "gson"
+        }
 
     }
 
