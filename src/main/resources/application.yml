@@ -27,3 +27,9 @@ spring:
       basename: i18n/base/messages,i18n/main/messages,i18n/mongodb/messages
       encoding: UTF-8
       cache-duration: -1
+
+springdoc:
+  packages-to-scan:
+    - com.bcd
+  swagger-ui:
+    path: /swagger-ui.html

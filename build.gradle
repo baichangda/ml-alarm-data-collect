@@ -1,7 +1,7 @@
 buildscript {
     ext {
-        springBootVersion = '2.4.3'
-        lombokVersion="1.18.18"
+        springBootVersion = '2.4.5'
+        lombokVersion="1.18.20"
         mavenRepoUrl='https://maven.aliyun.com/repository/central'
     }
 
@@ -39,8 +39,6 @@ allprojects{
     repositories {
         mavenLocal()
         maven { url "${mavenRepoUrl}" }
-        maven { url "https://jitpack.io" }
-//        maven { url "${incarMavenRepoUrl}" }
         mavenCentral()
     }
 
@@ -52,9 +50,19 @@ allprojects{
             downloadJavadoc=true
         }
     }
-    dependencies{
+    //去除springboot默认的logback
+    configurations.all {
+        exclude group:'org.springframework.boot', module: 'spring-boot-starter-logging'
+        exclude module: 'logback-classic'
+        exclude module: 'logback-core'
+    }
+
+    dependencies {
+        //邮件支持
+        compile("org.springframework.boot:spring-boot-starter-mail")
+
         // https://mvnrepository.com/artifact/org.projectlombok/lombok
-        compileOnly  group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
+        compileOnly group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
         annotationProcessor group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
 
     }
