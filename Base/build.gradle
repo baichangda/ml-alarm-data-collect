@@ -12,16 +12,12 @@ dependencies {
     //springboot validation支持
     compile("org.springframework.boot:spring-boot-starter-validation")
 
-    // https://mvnrepository.com/artifact/com.google.guava/guava
-    compile group: 'com.google.guava', name: 'guava', version: "${guavaVersion}"
-
     // https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-ui
     compile group: 'org.springdoc', name: 'springdoc-openapi-ui', version: "${springdocVersion}"
 
 }
 buildscript {
     ext {
-        guavaVersion = '30.1.1-jre'
         disruptorVersion='3.4.4'
         springdocVersion='1.5.8'
     }

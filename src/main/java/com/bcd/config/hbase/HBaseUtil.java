@@ -20,17 +20,16 @@ import java.security.NoSuchAlgorithmException;
 import java.text.MessageFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 
 @Configuration
-public class HBaseUtil{
+public class HBaseUtil {
 
     public static final String TELEMETRY_JSON = "saic:json";
+    public static final String ALARM_TABLE = "saic:alarm";
     private static final String C_ZERO32 = "00000000000000000000000000000000";
     private static final String C_SHARP32 = "################################";
     /**
@@ -69,6 +68,10 @@ public class HBaseUtil{
         return connection.getTable(TableName.valueOf(tableName), workPool);
     }
 
+    public static List<Map<String,String>> queryAlarms() {
+        Scan scan = new Scan();
+        return queryDataMap(ALARM_TABLE, scan);
+    }
 
     public static List<String> querySignals(String vin, Date startTime, Date endTime) {
         //根据时间获取表名
@@ -116,17 +119,6 @@ public class HBaseUtil{
         return queryDataString(tableName, scan);
     }
 
-    /**
-     * 00
-     * 通过表名以及过滤条件查询数据
-     *
-     * @param tableName 表名
-     * @param scan      过滤条件
-     * @return List<T>
-     * @author sunjun
-     * @date 2018/10/23 10:13
-     * @since 1.0.0
-     */
     private static List<String> queryDataString(String tableName, Scan scan) {
         ResultScanner rs = null;
         // 获取表
@@ -137,6 +129,7 @@ public class HBaseUtil{
             rs = table.getScanner(scan);
 
             for (Result r : rs) {
+                Map<String,String> data=new HashMap<>();
                 for (Cell cell : r.listCells()) {
                     String jsonString = Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
                     if (StringUtils.isNotBlank(jsonString)) {
@@ -148,6 +141,54 @@ public class HBaseUtil{
                         }
                     }
                 }
+
+            }
+        } catch (IOException e) {
+            logger.error(MessageFormat.format("遍历查询指定表中的所有数据失败,tableName:{0}"
+                    , tableName), e);
+            e.printStackTrace();
+        } finally {
+            close(null, rs, table);
+        }
+
+        return dataList;
+    }
+
+    /**
+     * 00
+     * 通过表名以及过滤条件查询数据
+     *
+     * @param tableName 表名
+     * @param scan      过滤条件
+     * @return List<T>
+     * @author sunjun
+     * @date 2018/10/23 10:13
+     * @since 1.0.0
+     */
+    private static List<Map<String,String>> queryDataMap(String tableName, Scan scan) {
+        ResultScanner rs = null;
+        // 获取表
+        Table table = null;
+        List<Map<String,String>> dataList = new ArrayList<>();
+        try {
+            table = getTable(tableName);
+            rs = table.getScanner(scan);
+
+            for (Result r : rs) {
+                Map<String,String> data=new HashMap<>();
+                for (Cell cell : r.listCells()) {
+                    String column = Bytes.toString(cell.getQualifierArray(), cell.getQualifierOffset(), cell.getQualifierLength());
+                    String jsonString = Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
+                    if (StringUtils.isNotBlank(jsonString)) {
+                        try {
+                            data.put(column,jsonString);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            logger.error("数据转换异常:{0}", jsonString);
+                        }
+                    }
+                }
+                dataList.add(data);
             }
         } catch (IOException e) {
             logger.error(MessageFormat.format("遍历查询指定表中的所有数据失败,tableName:{0}"
