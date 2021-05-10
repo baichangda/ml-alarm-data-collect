@@ -39,8 +39,8 @@ public class HBaseUtil {
     private static Logger logger = LoggerFactory.getLogger(HBaseUtil.class);
     private static org.apache.hadoop.conf.Configuration configuration = null;
     private static Connection connection = null;
-    private static ScheduledExecutorService connPool = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
-    private static ScheduledExecutorService workPool = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
+    private static ScheduledExecutorService connPool = Executors.newScheduledThreadPool(1);
+    private static ScheduledExecutorService workPool = Executors.newScheduledThreadPool(1);
     private static DateTimeFormatter dtf1 = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
     private static DateTimeFormatter dtf2 = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.of("+8"));
     private static String json = "saic:json_";
