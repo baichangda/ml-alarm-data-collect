@@ -1,10 +1,1 @@
-app=ml-alarm-data-collect
-pid=`ps -ef | grep $app | grep -v grep |awk '{print $2}'`
-if [ $pid ]; then
-    echo :App  is  running pid=$pid
-    kill -9 $pid
-fi
-gradle bootJar
-echo :bootjar succeed
-nohup java -jar $app>/dev/null 2>&1 &
-echo :start succeed
+nohup  /app/software/gradle-6.8.1/bin/gradle bootRun>/dev/null 2>&1 &
