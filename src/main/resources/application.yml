@@ -13,6 +13,8 @@ server:
     resources:
       chain:
         cache: false
+
+spring:
   profiles.active: dev
   freemarker:
     checkTemplateLocation: false
