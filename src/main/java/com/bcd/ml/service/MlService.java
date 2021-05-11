@@ -50,76 +50,76 @@ public class MlService {
     MongoTemplate mongoTemplate;
 
     public int[] saveToMongo() {
-
-        AtomicInteger allAlarmCount = new AtomicInteger();
-        AtomicInteger allSignalCount = new AtomicInteger();
-        AtomicInteger alarmCount = new AtomicInteger();
-        AtomicInteger signalCount = new AtomicInteger();
-        int period = 5;
         ScheduledExecutorService monitorPool = Executors.newScheduledThreadPool(1);
-        monitorPool.scheduleWithFixedDelay(() -> {
-            int count1 = alarmCount.getAndSet(0);
-            int count2 = signalCount.getAndSet(0);
-            logger.info("count[{},{}] speed[{},{}]", allAlarmCount.get(), allSignalCount.get(), count1 / period, count2 / period);
-        }, period, period, TimeUnit.SECONDS);
-
-        int batch = 1000;
         ExecutorService alarmPool = Executors.newSingleThreadExecutor();
-        alarmPool.execute(() -> {
-            try (BufferedReader br = Files.newBufferedReader(Paths.get(alarmSourcePath))) {
+        try {
+            AtomicInteger allAlarmCount = new AtomicInteger();
+            AtomicInteger allSignalCount = new AtomicInteger();
+            AtomicInteger alarmCount = new AtomicInteger();
+            AtomicInteger signalCount = new AtomicInteger();
+            int period = 5;
+            monitorPool.scheduleWithFixedDelay(() -> {
+                int count1 = alarmCount.getAndSet(0);
+                int count2 = signalCount.getAndSet(0);
+                logger.info("count[{},{}] speed[{},{}]", allAlarmCount.get(), allSignalCount.get(), count1 / period, count2 / period);
+            }, period, period, TimeUnit.SECONDS);
+
+            int batch = 1000;
+            alarmPool.execute(() -> {
+                try (BufferedReader br = Files.newBufferedReader(Paths.get(alarmSourcePath))) {
+                    List<String> tempList = new ArrayList<>();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        tempList.add(line);
+                        if (tempList.size() == batch) {
+                            mongoTemplate.insert(tempList, "alarm_all");
+                            alarmCount.addAndGet(batch);
+                            allAlarmCount.addAndGet(batch);
+                            tempList.clear();
+                        }
+                    }
+                    mongoTemplate.insert(tempList, "alarm_all");
+                    alarmCount.addAndGet(tempList.size());
+                    allAlarmCount.addAndGet(tempList.size());
+                } catch (IOException e) {
+                    throw BaseRuntimeException.getException(e);
+                }
+            });
+
+            try (BufferedReader br = Files.newBufferedReader(Paths.get(signalSourcePath))) {
                 List<String> tempList = new ArrayList<>();
                 String line;
                 while ((line = br.readLine()) != null) {
                     tempList.add(line);
                     if (tempList.size() == batch) {
-                        mongoTemplate.insert(tempList, "alarm_all");
-                        alarmCount.addAndGet(batch);
-                        allAlarmCount.addAndGet(batch);
+                        mongoTemplate.insert(tempList, "signal_all");
+                        signalCount.addAndGet(batch);
+                        allSignalCount.addAndGet(batch);
                         tempList.clear();
                     }
                 }
-                mongoTemplate.insert(tempList, "alarm_all");
-                alarmCount.addAndGet(tempList.size());
-                allAlarmCount.addAndGet(tempList.size());
+                mongoTemplate.insert(tempList, "signal_all");
+                signalCount.addAndGet(tempList.size());
+                allSignalCount.addAndGet(tempList.size());
             } catch (IOException e) {
                 throw BaseRuntimeException.getException(e);
             }
-        });
+            return new int[]{allAlarmCount.get(),allSignalCount.get()};
 
-        try (BufferedReader br = Files.newBufferedReader(Paths.get(signalSourcePath))) {
-            List<String> tempList = new ArrayList<>();
-            String line;
-            while ((line = br.readLine()) != null) {
-                tempList.add(line);
-                if (tempList.size() == batch) {
-                    mongoTemplate.insert(tempList, "signal_all");
-                    signalCount.addAndGet(batch);
-                    allSignalCount.addAndGet(batch);
-                    tempList.clear();
+        }finally {
+            try {
+                alarmPool.shutdown();
+                while (!alarmPool.awaitTermination(60, TimeUnit.SECONDS)) {
+
                 }
+                monitorPool.shutdown();
+                while (!monitorPool.awaitTermination(60, TimeUnit.SECONDS)) {
+
+                }
+            } catch (InterruptedException e) {
+                throw BaseRuntimeException.getException(e);
             }
-            mongoTemplate.insert(tempList, "signal_all");
-            signalCount.addAndGet(tempList.size());
-            allSignalCount.addAndGet(tempList.size());
-        } catch (IOException e) {
-            throw BaseRuntimeException.getException(e);
         }
-
-        try {
-            alarmPool.shutdown();
-            while (!alarmPool.awaitTermination(60, TimeUnit.SECONDS)) {
-
-            }
-            monitorPool.shutdown();
-            while (!monitorPool.awaitTermination(60, TimeUnit.SECONDS)) {
-
-            }
-        }catch (InterruptedException e){
-            throw BaseRuntimeException.getException(e);
-        }
-
-        return new int[]{allAlarmCount.get(),allSignalCount.get()};
-
     }
 
     public int[] fetchAndSave() {
