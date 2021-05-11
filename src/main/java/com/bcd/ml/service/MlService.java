@@ -66,6 +66,7 @@ public class MlService {
 
             int batch = 1000;
             alarmPool.execute(() -> {
+                mongoTemplate.dropCollection("alarm_all");
                 try (BufferedReader br = Files.newBufferedReader(Paths.get(alarmSourcePath))) {
                     List<String> tempList = new ArrayList<>();
                     String line;
@@ -86,6 +87,7 @@ public class MlService {
                 }
             });
 
+            mongoTemplate.dropCollection("signal_all");
             try (BufferedReader br = Files.newBufferedReader(Paths.get(signalSourcePath))) {
                 List<String> tempList = new ArrayList<>();
                 String line;
