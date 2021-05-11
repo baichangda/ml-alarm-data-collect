@@ -17,9 +17,16 @@ public class MlController {
     MlService mlService;
 
     @RequestMapping(value = "/fetchAndSave", method = RequestMethod.GET)
-    @Operation(description = "获取报警数据和信号数据并保存")
-    @ApiResponse(responseCode = "200", description = "获取报警数据和信号数据并保存")
+    @Operation(description = "获取报警数据和信号数据并保存文件")
+    @ApiResponse(responseCode = "200", description = "获取报警数据和信号数据并保存文件")
     public JsonMessage<int[]> fetchAndSave(){
         return JsonMessage.<int[]>success().withData(mlService.fetchAndSave());
+    }
+
+    @RequestMapping(value = "/saveToMongo", method = RequestMethod.GET)
+    @Operation(description = "解析数据文件保存到mongo")
+    @ApiResponse(responseCode = "200", description = "解析数据文件保存到mongo")
+    public JsonMessage<int[]> saveToMongo(){
+        return JsonMessage.<int[]>success().withData(mlService.saveToMongo());
     }
 }

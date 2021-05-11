@@ -21,8 +21,8 @@ import java.text.MessageFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 
 @Configuration
@@ -39,8 +39,7 @@ public class HBaseUtil {
     private static Logger logger = LoggerFactory.getLogger(HBaseUtil.class);
     private static org.apache.hadoop.conf.Configuration configuration = null;
     private static Connection connection = null;
-    private static ScheduledExecutorService connPool = Executors.newScheduledThreadPool(1);
-    private static ScheduledExecutorService workPool = Executors.newScheduledThreadPool(1);
+    private static ExecutorService hbasePool = Executors.newFixedThreadPool(50);
     private static DateTimeFormatter dtf1 = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
     private static DateTimeFormatter dtf2 = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.of("+8"));
     private static String json = "saic:json_";
@@ -51,7 +50,7 @@ public class HBaseUtil {
             configuration = HBaseConfiguration.create();
             configuration.set("hbase.zookeeper.quorum", zookeeper);
             configuration.set("hbase.zookeeper.property.clientPort", port);
-            connection = ConnectionFactory.createConnection(configuration, connPool);
+            connection = ConnectionFactory.createConnection(configuration, hbasePool);
         } catch (IOException e) {
             throw BaseRuntimeException.getException(e);
         }
@@ -65,7 +64,7 @@ public class HBaseUtil {
      * @throws IOException IOException
      */
     private static Table getTable(String tableName) throws IOException {
-        return connection.getTable(TableName.valueOf(tableName), workPool);
+        return connection.getTable(TableName.valueOf(tableName), hbasePool);
     }
 
     public static List<Map<String,String>> queryAlarms() {
@@ -129,7 +128,6 @@ public class HBaseUtil {
             rs = table.getScanner(scan);
 
             for (Result r : rs) {
-                Map<String,String> data=new HashMap<>();
                 for (Cell cell : r.listCells()) {
                     String jsonString = Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
                     if (StringUtils.isNotBlank(jsonString)) {
