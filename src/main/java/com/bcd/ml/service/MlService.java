@@ -20,8 +20,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,6 +51,8 @@ public class MlService {
 
     @Autowired
     MongoTemplate mongoTemplate;
+
+    DateTimeFormatter formatter=DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
 
     public int[] saveToMongo() {
         ScheduledExecutorService monitorPool = Executors.newScheduledThreadPool(1);
@@ -256,7 +261,7 @@ public class MlService {
                             LocalDateTime ldt = LocalDateTime.ofInstant(alarmTime.toInstant(), zoneOffset);
                             Date d1 = Date.from(ldt.plusSeconds(-48).toInstant(zoneOffset));
                             Date d2 = Date.from(ldt.plusSeconds(47).toInstant(zoneOffset));
-                            List<String> signals = HBaseUtil.querySignals(vin, d1, d2);
+                            List<String[]> signals = HBaseUtil.querySignals(vin, d1, d2);
                             int signalSize = signals.size();
                             String key1 = vin + "-" + beginTime + "-" + alarmType + "-" + platformCode;
                             String key2 = vin + "-" + beginTime;
@@ -266,11 +271,12 @@ public class MlService {
                                     processedAlarmCount.incrementAndGet();
                                     allProcessedAlarmCount.incrementAndGet();
                                     alarmQueue.put(alarm);
-                                    for (String signalJson : signals) {
+                                    for (String[] arr : signals) {
+                                        String signalTime=arr[0].substring(29,43);
+                                        String signalJson=arr[1];
                                         JsonNode jsonNode = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(signalJson);
                                         JsonNode json = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(jsonNode.get("json").asText());
-                                        long fileCreationTime = json.get("FileCreationTime").asLong();
-                                        String key3 = vin + "-" + fileCreationTime;
+                                        String key3 = vin + "-" + signalTime;
                                         if (!set3.contains(key3)) {
                                             synchronized (key3.intern()) {
                                                 if (set3.contains(key3)) {
@@ -302,8 +308,9 @@ public class MlService {
                                                         }
                                                     });
                                                 }
-                                                data.put("collectDate", LongNode.valueOf(fileCreationTime + j));
+                                                data.put("collectDate", LongNode.valueOf(Instant.from(formatter.parse(signalTime)).getEpochSecond()+ j));
                                                 data.put("vin", TextNode.valueOf(vin));
+                                                data.put("vehicleType", TextNode.valueOf(alarm.get("vehicleType")));
                                                 dataList.add(data);
                                             }
                                             processedSignalCount.addAndGet(dataSize);

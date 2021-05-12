@@ -5,6 +5,7 @@ import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.NoTagsKeyValue;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -72,7 +73,7 @@ public class HBaseUtil {
         return queryDataMap(ALARM_TABLE, scan);
     }
 
-    public static List<String> querySignals(String vin, Date startTime, Date endTime) {
+    public static List<String[]> querySignals(String vin, Date startTime, Date endTime) {
         //根据时间获取表名
         //根据时间获取表名
         String table = TELEMETRY_JSON;
@@ -83,7 +84,7 @@ public class HBaseUtil {
         return queryJsonData(vin, startTime, endTime, table);
     }
 
-    private static List<String> queryJsonData(String vin, Date startTime, Date endTime, String tableName) {
+    private static List<String[]> queryJsonData(String vin, Date startTime, Date endTime, String tableName) {
         // 参数不能缺少
         if (null == vin || null == startTime || null == endTime) {
             throw new IllegalArgumentException("the params can't be null");
@@ -106,21 +107,22 @@ public class HBaseUtil {
         return queryDataString(tableName, scan);
     }
 
-    private static List<String> queryDataString(String tableName, Scan scan) {
+    private static List<String[]> queryDataString(String tableName, Scan scan) {
         ResultScanner rs = null;
         // 获取表
         Table table = null;
-        List<String> dataList = new ArrayList<>();
+        List<String[]> dataList = new ArrayList<>();
         try {
             table = getTable(tableName);
             rs = table.getScanner(scan);
 
             for (Result r : rs) {
                 for (Cell cell : r.listCells()) {
+                    String key=((NoTagsKeyValue) cell).getKeyString();
                     String jsonString = Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
                     if (StringUtils.isNotBlank(jsonString)) {
                         try {
-                            dataList.add(jsonString);
+                            dataList.add(new String[]{key,jsonString});
                         } catch (Exception e) {
                             e.printStackTrace();
                             logger.error("数据转换异常:{0}", jsonString);
