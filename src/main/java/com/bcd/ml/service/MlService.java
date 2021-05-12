@@ -106,9 +106,10 @@ public class MlService {
             } catch (IOException e) {
                 throw BaseRuntimeException.getException(e);
             }
-            return new int[]{allAlarmCount.get(),allSignalCount.get()};
+            logger.info("finish save mongo alarm[{}] signal[{}]", allAlarmCount.get(), allSignalCount.get());
+            return new int[]{allAlarmCount.get(), allSignalCount.get()};
 
-        }finally {
+        } finally {
             try {
                 alarmPool.shutdown();
                 while (!alarmPool.awaitTermination(60, TimeUnit.SECONDS)) {
@@ -125,7 +126,6 @@ public class MlService {
     }
 
     public int[] fetchAndSave() {
-
         List<Map<String, String>> alarmList = HBaseUtil.queryAlarms();
         int size1 = alarmList.size();
         logger.info("fetch alarm[{}]", size1);
@@ -135,11 +135,12 @@ public class MlService {
         long alarmStartTime = DateZoneUtil.stringToDate_day(alarmStartTimeStr).getTime();
         alarmList.removeIf(e -> {
             String alarmLevel = e.get("alarmLevel");
-            if ("3".equals(alarmLevel)) {
-                return true;
-            } else {
+            String platformCode = e.get("platformCode");
+            if ("3".equals(alarmLevel) && ("gb".equals(platformCode) || "gb-private".equals(platformCode))) {
                 long cur = DateZoneUtil.stringToDate_second(e.get("beginTime")).getTime();
                 return cur < alarmStartTime;
+            } else {
+                return true;
             }
         });
         int size2 = alarmList.size();
@@ -249,12 +250,15 @@ public class MlService {
                         if (alarm != null) {
                             String vin = alarm.get("vin");
                             String beginTime = alarm.get("beginTime");
+                            String alarmType = alarm.get("alarmType");
+                            String platformCode = alarm.get("platformCode");
                             Date alarmTime = DateZoneUtil.stringToDate_second(beginTime);
                             LocalDateTime ldt = LocalDateTime.ofInstant(alarmTime.toInstant(), zoneOffset);
                             Date d1 = Date.from(ldt.plusSeconds(-48).toInstant(zoneOffset));
                             Date d2 = Date.from(ldt.plusSeconds(47).toInstant(zoneOffset));
                             List<String> signals = HBaseUtil.querySignals(vin, d1, d2);
                             int signalSize = signals.size();
+                            String key1 = vin + "-" + beginTime + "-" + alarmType + "-" + platformCode;
                             String key2 = vin + "-" + beginTime;
                             Integer old = map2.putIfAbsent(key2, signalSize);
                             if (old == null) {
@@ -307,12 +311,16 @@ public class MlService {
                                             signalQueue.put(dataList);
                                         }
                                     }
+                                } else {
+                                    logger.info("no signal alarm[{}}]", key1);
                                 }
                             } else {
                                 if (old > 0) {
                                     processedAlarmCount.incrementAndGet();
                                     allProcessedAlarmCount.incrementAndGet();
                                     alarmQueue.put(alarm);
+                                } else {
+                                    logger.info("no signal alarm[{}] in map2", key1);
                                 }
                             }
                         }
@@ -334,7 +342,8 @@ public class MlService {
                 String vin = alarm.get("vin");
                 String beginTime = alarm.get("beginTime");
                 String alarmType = alarm.get("alarmType");
-                String key1 = vin + "-" + beginTime + "-" + alarmType;
+                String platformCode = alarm.get("platformCode");
+                String key1 = vin + "-" + beginTime + "-" + alarmType + "-" + platformCode;
                 if (!set1.contains(key1)) {
                     set1.add(key1);
                     String key2 = vin + "-" + beginTime;
@@ -346,10 +355,13 @@ public class MlService {
                             processedAlarmCount.incrementAndGet();
                             allProcessedAlarmCount.incrementAndGet();
                             alarmQueue.put(alarm);
+                        } else {
+                            logger.info("no signal alarm[{}] in map2", key1);
                         }
                     }
+                } else {
+                    logger.info("duplicate alarm[{}]", key1);
                 }
-
             } catch (InterruptedException e) {
                 logger.error("parse alarm error", e);
             }
@@ -394,6 +406,6 @@ public class MlService {
 
         logger.info("finish alarm[{}] signal[{}]", allProcessedAlarmCount.get(), allProcessedSignalCount.get());
 
-        return new int[]{processedAlarmCount.get(), processedSignalCount.get()};
+        return new int[]{allProcessedAlarmCount.get(), allProcessedSignalCount.get()};
     }
 }

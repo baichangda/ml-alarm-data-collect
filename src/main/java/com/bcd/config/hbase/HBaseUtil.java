@@ -74,25 +74,13 @@ public class HBaseUtil {
 
     public static List<String> querySignals(String vin, Date startTime, Date endTime) {
         //根据时间获取表名
-        List<String> list = new ArrayList<>();
+        //根据时间获取表名
+        String table = TELEMETRY_JSON;
         Long tboxTime = startTime.getTime() / 1000;
-        if (tboxTime.equals(jsonTime)) {
-            String table = TELEMETRY_JSON;
-            List<String> list1 = queryJsonData(vin, startTime, endTime, table);
-            list.addAll(list1);
-
+        if(tboxTime >= jsonTime){
             table = makeJsonTable(tboxTime);
-            List<String> list2 = queryJsonData(vin, startTime, endTime, table);
-            list.addAll(list2);
-        } else {
-            String table = TELEMETRY_JSON;
-            if (tboxTime >= jsonTime) {
-                table = makeJsonTable(tboxTime);
-            }
-            List<String> list1 = queryJsonData(vin, startTime, endTime, table);
-            list.addAll(list1);
         }
-        return list;
+        return queryJsonData(vin, startTime, endTime, table);
     }
 
     private static List<String> queryJsonData(String vin, Date startTime, Date endTime, String tableName) {
