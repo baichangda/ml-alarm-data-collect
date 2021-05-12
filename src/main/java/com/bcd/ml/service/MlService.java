@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -43,6 +44,9 @@ public class MlService {
     @Value("${workPoolSize}")
     int workPoolSize;
 
+    @Value("${alarmTimeOffset}")
+    int alarmTimeOffset;
+
     @Value("${alarmSourcePath}")
     String alarmSourcePath;
 
@@ -71,7 +75,7 @@ public class MlService {
 
             int batch = 1000;
             alarmPool.execute(() -> {
-                mongoTemplate.dropCollection("alarm_all");
+                mongoTemplate.remove(new Query(),"alarm_all");
                 try (BufferedReader br = Files.newBufferedReader(Paths.get(alarmSourcePath))) {
                     List<String> tempList = new ArrayList<>();
                     String line;
@@ -92,7 +96,7 @@ public class MlService {
                 }
             });
 
-            mongoTemplate.dropCollection("signal_all");
+            mongoTemplate.remove(new Query(),"signal_all");
             try (BufferedReader br = Files.newBufferedReader(Paths.get(signalSourcePath))) {
                 List<String> tempList = new ArrayList<>();
                 String line;
@@ -259,8 +263,8 @@ public class MlService {
                             String platformCode = alarm.get("platformCode");
                             Date alarmTime = DateZoneUtil.stringToDate_second(beginTime);
                             LocalDateTime ldt = LocalDateTime.ofInstant(alarmTime.toInstant(), zoneOffset);
-                            Date d1 = Date.from(ldt.plusSeconds(-48).toInstant(zoneOffset));
-                            Date d2 = Date.from(ldt.plusSeconds(47).toInstant(zoneOffset));
+                            Date d1 = Date.from(ldt.plusSeconds(-alarmTimeOffset).toInstant(zoneOffset));
+                            Date d2 = Date.from(ldt.plusSeconds(alarmTimeOffset).toInstant(zoneOffset));
                             List<String[]> signals = HBaseUtil.querySignals(vin, d1, d2);
                             int signalSize = signals.size();
                             String key1 = vin + "-" + beginTime + "-" + alarmType + "-" + platformCode;
