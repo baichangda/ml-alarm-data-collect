@@ -134,7 +134,12 @@ public class MlService {
         }
     }
 
-    public int[] fetchAndSave() {
+    /**
+     *
+     * @param transfer 是否转换
+     * @return
+     */
+    public int[] fetchAndSave(boolean transfer) {
         List<Map<String, String>> alarmList = HBaseUtil.queryAlarms();
         int size1 = alarmList.size();
         logger.info("fetch alarm[{}]", size1);
@@ -187,7 +192,7 @@ public class MlService {
 
 
         ArrayBlockingQueue<Map<String, String>> alarmQueue = new ArrayBlockingQueue<>(5000);
-        ArrayBlockingQueue<List<Map<String, JsonNode>>> signalQueue = new ArrayBlockingQueue<>(5000);
+        ArrayBlockingQueue<String> signalQueue = new ArrayBlockingQueue<>(5000);
         ExecutorService alarmPool = Executors.newSingleThreadExecutor();
         ExecutorService signalPool = Executors.newSingleThreadExecutor();
         alarmPool.execute(() -> {
@@ -224,14 +229,12 @@ public class MlService {
             }
             try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(signalsFilePath), StandardOpenOption.APPEND)) {
                 while (!stop.get()) {
-                    List<Map<String, JsonNode>> list = signalQueue.poll(3, TimeUnit.SECONDS);
-                    if (list != null) {
-                        for (Map<String, JsonNode> data : list) {
-                            bw.write(JsonUtil.toJson(data));
-                            bw.newLine();
-                        }
+                    String signalJsonStr= signalQueue.poll(3, TimeUnit.SECONDS);
+                    if (signalJsonStr != null) {
+                        bw.write(signalJsonStr);
+                        bw.newLine();
                         bw.flush();
-                        saveSignalCount.addAndGet(list.size());
+                        saveSignalCount.incrementAndGet();
                     }
                 }
 
@@ -289,37 +292,45 @@ public class MlService {
                                                     set3.add(key3);
                                                 }
                                             }
-                                            List<JsonNode> groupList = new ArrayList<>();
-                                            for (JsonNode group : json.get("channels")) {
-                                                groupList.add(group.get("data"));
-                                            }
-                                            int dataSize = groupList.get(0).size();
-                                            List<Map<String, JsonNode>> dataList = new ArrayList<>();
-                                            for (int j = 0; j < dataSize; j++) {
-                                                Map<String, JsonNode> data = new HashMap<>();
-                                                for (JsonNode group : groupList) {
-                                                    JsonNode cur = group.get(j);
-                                                    cur.fields().forEachRemaining(stringJsonNodeEntry -> {
-                                                        String key = stringJsonNodeEntry.getKey();
-                                                        JsonNode value = stringJsonNodeEntry.getValue();
-                                                        if (value.isArray()) {
-                                                            int index = 0;
-                                                            for (JsonNode node : value) {
-                                                                data.put(key + "_" + index++, node);
-                                                            }
-                                                        } else {
-                                                            data.put(key, value);
-                                                        }
-                                                    });
+                                            if(transfer){
+                                                List<JsonNode> groupList = new ArrayList<>();
+                                                for (JsonNode group : json.get("channels")) {
+                                                    groupList.add(group.get("data"));
                                                 }
-                                                data.put("collectDate", LongNode.valueOf(Instant.from(formatter.parse(signalTime)).getEpochSecond()+ j));
-                                                data.put("vin", TextNode.valueOf(vin));
-                                                data.put("vehicleType", TextNode.valueOf(alarm.get("vehicleType")));
-                                                dataList.add(data);
+                                                int dataSize = groupList.get(0).size();
+                                                List<Map<String, JsonNode>> dataList = new ArrayList<>();
+                                                for (int j = 0; j < dataSize; j++) {
+                                                    Map<String, JsonNode> data = new HashMap<>();
+                                                    for (JsonNode group : groupList) {
+                                                        JsonNode cur = group.get(j);
+                                                        cur.fields().forEachRemaining(stringJsonNodeEntry -> {
+                                                            String key = stringJsonNodeEntry.getKey();
+                                                            JsonNode value = stringJsonNodeEntry.getValue();
+                                                            if (value.isArray()) {
+                                                                int index = 0;
+                                                                for (JsonNode node : value) {
+                                                                    data.put(key + "_" + index++, node);
+                                                                }
+                                                            } else {
+                                                                data.put(key, value);
+                                                            }
+                                                        });
+                                                    }
+                                                    data.put("collectDate", LongNode.valueOf(Instant.from(formatter.parse(signalTime)).getEpochSecond()+ j));
+                                                    data.put("vin", TextNode.valueOf(vin));
+                                                    data.put("vehicleType", TextNode.valueOf(alarm.get("vehicleType")));
+                                                    dataList.add(data);
+                                                }
+                                                processedSignalCount.addAndGet(dataSize);
+                                                allProcessedSignalCount.addAndGet(dataSize);
+                                                for (Map<String, JsonNode> data : dataList) {
+                                                    signalQueue.put(JsonUtil.toJson(data));
+                                                }
+                                            }else{
+                                                processedSignalCount.incrementAndGet();
+                                                allProcessedSignalCount.incrementAndGet();
+                                                signalQueue.put(signalJson);
                                             }
-                                            processedSignalCount.addAndGet(dataSize);
-                                            allProcessedSignalCount.addAndGet(dataSize);
-                                            signalQueue.put(dataList);
                                         }
                                     }
                                 } else {
