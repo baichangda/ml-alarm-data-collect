@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -19,15 +20,8 @@ public class MlController {
     @RequestMapping(value = "/fetchAndSave", method = RequestMethod.GET)
     @Operation(description = "获取报警数据和信号数据并保存文件")
     @ApiResponse(responseCode = "200", description = "获取报警数据和信号数据并保存文件")
-    public JsonMessage<int[]> fetchAndSave(){
-        return JsonMessage.<int[]>success().withData(mlService.fetchAndSave());
-    }
-
-    @RequestMapping(value = "/fetchAndSave2", method = RequestMethod.GET)
-    @Operation(description = "获取报警数据和信号数据并保存文件")
-    @ApiResponse(responseCode = "200", description = "获取报警数据和信号数据并保存文件")
-    public JsonMessage<int[]> fetchAndSave2(){
-        return JsonMessage.<int[]>success().withData(mlService.fetchAndSave2());
+    public JsonMessage<int[]> fetchAndSave(@RequestParam int flag){
+        return JsonMessage.<int[]>success().withData(mlService.fetchAndSave(flag));
     }
 
     @RequestMapping(value = "/saveToMongo", method = RequestMethod.GET)

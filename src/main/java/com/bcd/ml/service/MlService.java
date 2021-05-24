@@ -136,10 +136,10 @@ public class MlService {
 
     /**
      *
-     * @param transfer 是否转换
+     * @param flag 是否转换
      * @return
      */
-    public int[] fetchAndSave(boolean transfer) {
+    public int[] fetchAndSave(int flag) {
         List<Map<String, String>> alarmList = HBaseUtil.queryAlarms();
         int size1 = alarmList.size();
         logger.info("fetch alarm[{}]", size1);
@@ -292,7 +292,7 @@ public class MlService {
                                                     set3.add(key3);
                                                 }
                                             }
-                                            if(transfer){
+                                            if(flag==1){
                                                 List<JsonNode> groupList = new ArrayList<>();
                                                 for (JsonNode group : json.get("channels")) {
                                                     groupList.add(group.get("data"));
