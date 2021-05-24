@@ -58,7 +58,7 @@ public class MlService {
 
     DateTimeFormatter formatter=DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
 
-    public int[] saveToMongo() {
+    public int[] saveToMongo(int flag) {
         ScheduledExecutorService monitorPool = Executors.newScheduledThreadPool(1);
         ExecutorService alarmPool = Executors.newSingleThreadExecutor();
         try {
@@ -96,24 +96,26 @@ public class MlService {
                 }
             });
 
-            mongoTemplate.remove(new Query(),"signal_all");
-            try (BufferedReader br = Files.newBufferedReader(Paths.get(signalSourcePath))) {
-                List<String> tempList = new ArrayList<>();
-                String line;
-                while ((line = br.readLine()) != null) {
-                    tempList.add(line);
-                    if (tempList.size() == batch) {
-                        mongoTemplate.insert(tempList, "signal_all");
-                        signalCount.addAndGet(batch);
-                        allSignalCount.addAndGet(batch);
-                        tempList.clear();
+            if(flag==1){
+                mongoTemplate.remove(new Query(),"signal_all");
+                try (BufferedReader br = Files.newBufferedReader(Paths.get(signalSourcePath))) {
+                    List<String> tempList = new ArrayList<>();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        tempList.add(line);
+                        if (tempList.size() == batch) {
+                            mongoTemplate.insert(tempList, "signal_all");
+                            signalCount.addAndGet(batch);
+                            allSignalCount.addAndGet(batch);
+                            tempList.clear();
+                        }
                     }
+                    mongoTemplate.insert(tempList, "signal_all");
+                    signalCount.addAndGet(tempList.size());
+                    allSignalCount.addAndGet(tempList.size());
+                } catch (IOException e) {
+                    throw BaseRuntimeException.getException(e);
                 }
-                mongoTemplate.insert(tempList, "signal_all");
-                signalCount.addAndGet(tempList.size());
-                allSignalCount.addAndGet(tempList.size());
-            } catch (IOException e) {
-                throw BaseRuntimeException.getException(e);
             }
             logger.info("finish save mongo alarm[{}] signal[{}]", allAlarmCount.get(), allSignalCount.get());
             return new int[]{allAlarmCount.get(), allSignalCount.get()};

@@ -27,7 +27,7 @@ public class MlController {
     @RequestMapping(value = "/saveToMongo", method = RequestMethod.GET)
     @Operation(description = "解析数据文件保存到mongo")
     @ApiResponse(responseCode = "200", description = "解析数据文件保存到mongo")
-    public JsonMessage<int[]> saveToMongo(){
-        return JsonMessage.<int[]>success().withData(mlService.saveToMongo());
+    public JsonMessage<int[]> saveToMongo(@RequestParam int flag){
+        return JsonMessage.<int[]>success().withData(mlService.saveToMongo(flag));
     }
 }
