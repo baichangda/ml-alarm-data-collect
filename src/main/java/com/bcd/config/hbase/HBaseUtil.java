@@ -406,13 +406,17 @@ public class HBaseUtil {
         }
 
         if(reverseOrder != null && reverseOrder){
-            scan.setReversed(true);
-        }
-        if(StringUtils.isNoneBlank(startRowKey)){
-            scan.setStartRow(Bytes.toBytes(endRowKey));
-        }
-        if(StringUtils.isNoneBlank(endRowKey)){
-            scan.setStopRow(Bytes.toBytes(startRowKey));
+            scan.setReversed(reverseOrder);
+
+            if(StringUtils.isNoneBlank(startRowKey) && StringUtils.isNoneBlank(endRowKey)){
+                scan.setStartRow(Bytes.toBytes(endRowKey));
+                scan.setStopRow(Bytes.toBytes(startRowKey));
+            }
+        }else{
+            if(StringUtils.isNoneBlank(startRowKey) && StringUtils.isNoneBlank(endRowKey)){
+                scan.setStartRow(Bytes.toBytes(startRowKey));
+                scan.setStopRow(Bytes.toBytes(endRowKey));
+            }
         }
 
         return queryDataMap(tableName, scan);
