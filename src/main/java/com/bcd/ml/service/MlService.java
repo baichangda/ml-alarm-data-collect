@@ -66,6 +66,9 @@ public class MlService {
     DateTimeFormatter formatter=DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
 
     Parser_gb32960 parser_gb32960=new Parser_gb32960(false);
+    {
+        parser_gb32960.init();
+    }
 
 
     public int[] saveToMongo(int flag) {
@@ -491,17 +494,21 @@ public class MlService {
         Path path=Paths.get("signal_gb.txt");
         List<String> tempList=new ArrayList<>();
         try (BufferedReader br = Files.newBufferedReader(path)){
-            final String data = br.readLine();
-            byte [] bytes= ByteBufUtil.decodeHexDump(data);
-            ByteBuf byteBuf= Unpooled.wrappedBuffer(bytes);
-            final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
-            tempList.add(JsonUtil.toJson(packet));
-            if(tempList.size()==10000){
-                mongoTemplate.insert(tempList,"signal_gb");
-                tempList.clear();
+            String line;
+            while((line = br.readLine())!=null){
+                byte [] bytes= ByteBufUtil.decodeHexDump(line);
+                ByteBuf byteBuf= Unpooled.wrappedBuffer(bytes);
+                final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
+                tempList.add(JsonUtil.toJson(packet));
+                if(tempList.size()==10000){
+                    mongoTemplate.insert(tempList,"signal_gb");
+                    tempList.clear();
+                }
+                count++;
             }
-            count++;
-
+            if(tempList.size()>0){
+                mongoTemplate.insert(tempList,"signal_gb");
+            }
         } catch (IOException e) {
             throw BaseRuntimeException.getException(e);
         }
