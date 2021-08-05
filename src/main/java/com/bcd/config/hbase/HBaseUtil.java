@@ -3,11 +3,10 @@ package com.bcd.config.hbase;
 import com.bcd.base.exception.BaseRuntimeException;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.NoTagsKeyValue;
-import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.filter.Filter;
+import org.apache.hadoop.hbase.filter.PageFilter;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +30,7 @@ public class HBaseUtil {
 
     public static final String TELEMETRY_JSON = "saic:json";
     public static final String ALARM_TABLE = "saic:alarm";
+    private static final String DELIVERY_TABLE_NAME = "saic:delivery_message";
     private static final String C_ZERO32 = "00000000000000000000000000000000";
     private static final String C_SHARP32 = "################################";
     /**
@@ -82,6 +82,37 @@ public class HBaseUtil {
             table = makeJsonTable(tboxTime);
         }
         return queryJsonData(vin, startTime, endTime, table);
+    }
+
+    public static List<Map<String,String>> querySignals_gb(String vin, Date startTime, Date endTime){
+        String startRowKey = makeDeliveryMessageMinRowKey(vin, startTime.getTime()+"");
+        String endRowKey = makeDeliveryMessageMinRowKey(vin, endTime.getTime()+"");
+
+        List<Map<String,String>> res = queryData(startRowKey, endRowKey, DELIVERY_TABLE_NAME, null, false);
+        return res;
+    }
+
+    public static List<Map<String,String>> querySignals_gb(String startRowKey,int pageSize){
+        return queryData(startRowKey, null, DELIVERY_TABLE_NAME, pageSize, false);
+    }
+
+
+    /**
+     * 生成最小的rowkey（方便查询）
+     *
+     * @param vin         车辆vin码
+     * @param collectDate 采集时间
+     * @return
+     */
+    public static String makeDeliveryMessageMinRowKey(String vin, String collectDate) {
+        if (StringUtils.isBlank(vin)||StringUtils.isBlank(collectDate)) {
+            throw new IllegalArgumentException("param error");
+        }
+
+        String rowKey = String.format("%s%s%s%s%s%s", calcMd5(vin).substring(0, 7),
+                prependForceLen(vin, 17), appendForceLen(collectDate, 13), appendForceLenWithZERO("", 20), appendForceLenWithZERO("", 1), appendForceLenWithZERO("", 2));
+        logger.info("DeliveryMessage start rowKey is: {}", rowKey);
+        return rowKey;
     }
 
     private static List<String[]> queryJsonData(String vin, Date startTime, Date endTime, String tableName) {
@@ -315,6 +346,38 @@ public class HBaseUtil {
         }
     }
 
+    /**
+     * 追加0方式强制字符串长度
+     *
+     * @param value
+     * @param len
+     * @return
+     */
+    public static String appendForceLenWithZERO(String value, int len) {
+
+        if (value == null)
+            value = "";
+
+        if (value.length() == len)
+            return value;
+        else if (value.length() > len)
+            return value.substring(0, len);
+        else {
+            // 为了提高性能,不太长的字符串不使用StringBuilder来补足
+            int lenPad = len - value.length();
+            if (lenPad <= C_ZERO32.length()) {
+                return value + C_ZERO32.substring(0, lenPad);
+            } else {
+                StringBuilder sbX = new StringBuilder(len);
+                sbX.append(value);
+                sbX.setLength(len);
+                for (int i = value.length(); i < len; i++)
+                    sbX.setCharAt(i, '#');
+                return sbX.toString();
+            }
+        }
+    }
+
 
     /**
      * 根据采集时间生成json表名
@@ -329,6 +392,29 @@ public class HBaseUtil {
         String month = strs[1];
 
         return json + month + "m";
+    }
+
+
+    public static List<Map<String, String>> queryData(String startRowKey, String endRowKey, String tableName, Integer pageSize, Boolean reverseOrder) {
+
+        Scan scan = new Scan();
+
+        if(pageSize != null && pageSize > 0){
+            Filter filter = new PageFilter(pageSize);
+            scan.setFilter(filter);
+        }
+
+        if(reverseOrder != null && reverseOrder){
+            scan.setReversed(true);
+        }
+        if(StringUtils.isNoneBlank(startRowKey)){
+            scan.setStartRow(Bytes.toBytes(endRowKey));
+        }
+        if(StringUtils.isNoneBlank(endRowKey)){
+            scan.setStopRow(Bytes.toBytes(startRowKey));
+        }
+
+        return queryDataMap(tableName, scan);
     }
 
 }

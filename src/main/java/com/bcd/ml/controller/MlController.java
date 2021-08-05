@@ -30,4 +30,11 @@ public class MlController {
     public JsonMessage<int[]> saveToMongo(@RequestParam int flag){
         return JsonMessage.<int[]>success().withData(mlService.saveToMongo(flag));
     }
+
+    @RequestMapping(value = "/fetchAndSave_gb", method = RequestMethod.GET)
+    @Operation(description = "获取国标信号数据并保存文件")
+    @ApiResponse(responseCode = "200", description = "获取报警数据和信号数据并保存文件")
+    public JsonMessage<Integer> fetchAndSave_gb(@RequestParam(defaultValue = "10000000") int num){
+        return JsonMessage.<Integer>success().withData(mlService.fetchAndSave_gb(num));
+    }
 }

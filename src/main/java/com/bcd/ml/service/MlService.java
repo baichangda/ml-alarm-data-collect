@@ -19,6 +19,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
@@ -430,5 +431,45 @@ public class MlService {
         logger.info("finish alarm[{}] signal[{}]", allProcessedAlarmCount.get(), allProcessedSignalCount.get());
 
         return new int[]{allProcessedAlarmCount.get(), allProcessedSignalCount.get()};
+    }
+
+    public int fetchAndSave_gb(int num) {
+        Path path=Paths.get("signal_gb.txt");
+        int count=0;
+        int size=10000;
+        int n1=num/size;
+        int n2=num%size;
+        String startRowKey=null;
+        try(BufferedWriter bw=Files.newBufferedWriter(path)) {
+            for (int i = 0; i < n1; i++) {
+                List<Map<String, String>> res = HBaseUtil.querySignals_gb(startRowKey, n1);
+                int res_size=res.size();
+                startRowKey=res.get(res_size-1).get("row");
+                count += res_size;
+                bw.write(JsonUtil.toJson(res));
+                bw.newLine();
+                bw.flush();
+                logger.info("append cur[{}] all[{}]",res_size,count);
+                if (res.size() != size) {
+                    //说明没有数据了
+                    logger.info("finish with no more data all[{}]",count);
+                    return count;
+                }
+            }
+            if(n2>0) {
+                List<Map<String, String>> res = HBaseUtil.querySignals_gb(startRowKey, n2);
+                int res_size=res.size();
+                count += res_size;
+                bw.write(JsonUtil.toJson(res));
+                bw.newLine();
+                bw.flush();
+                logger.info("append cur[{}] all[{}]",res_size,count);
+                logger.info("finish all[{}]",count);
+            }
+            return count;
+        } catch (IOException e) {
+            throw BaseRuntimeException.getException(e);
+        }
+
     }
 }
