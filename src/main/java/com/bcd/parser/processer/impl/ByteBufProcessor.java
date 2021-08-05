@@ -6,8 +6,6 @@ import com.bcd.parser.processer.FieldProcessor;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
-import java.util.Objects;
-
 /**
  * 解析{@link ByteBuf}类型字段
  */

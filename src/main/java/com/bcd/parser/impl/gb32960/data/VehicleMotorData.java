@@ -3,9 +3,6 @@ package com.bcd.parser.impl.gb32960.data;
 import com.bcd.parser.anno.PacketField;
 import com.bcd.parser.anno.Parsable;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * 驱动电机数据
  */

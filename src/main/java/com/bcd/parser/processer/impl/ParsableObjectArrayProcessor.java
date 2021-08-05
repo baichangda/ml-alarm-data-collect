@@ -7,8 +7,6 @@ import com.bcd.parser.processer.FieldProcessor;
 import io.netty.buffer.ByteBuf;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * 解析{@link Parsable}标注的类

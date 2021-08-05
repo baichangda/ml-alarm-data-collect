@@ -6,8 +6,6 @@ import com.bcd.parser.processer.FieldProcessContext;
 import com.bcd.parser.processer.FieldProcessor;
 import io.netty.buffer.ByteBuf;
 
-import java.util.Objects;
-
 /**
  * 解析{@link String}类型字段
  * 步骤如下:

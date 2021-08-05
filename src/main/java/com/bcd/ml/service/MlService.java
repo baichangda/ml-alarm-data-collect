@@ -4,9 +4,14 @@ import com.bcd.base.exception.BaseRuntimeException;
 import com.bcd.base.util.DateZoneUtil;
 import com.bcd.base.util.JsonUtil;
 import com.bcd.config.hbase.HBaseUtil;
+import com.bcd.parser.impl.gb32960.Parser_gb32960;
+import com.bcd.parser.impl.gb32960.data.Packet;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
+import io.netty.buffer.Unpooled;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +36,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 @Service
 public class MlService {
@@ -58,6 +64,9 @@ public class MlService {
     MongoTemplate mongoTemplate;
 
     DateTimeFormatter formatter=DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
+
+    Parser_gb32960 parser_gb32960=new Parser_gb32960(false);
+
 
     public int[] saveToMongo(int flag) {
         ScheduledExecutorService monitorPool = Executors.newScheduledThreadPool(1);
@@ -442,12 +451,14 @@ public class MlService {
         String startRowKey=null;
         try(BufferedWriter bw=Files.newBufferedWriter(path)) {
             for (int i = 0; i < n1; i++) {
-                List<Map<String, String>> res = HBaseUtil.querySignals_gb(startRowKey, n1);
+                List<Map<String, String>> res = HBaseUtil.querySignals_gb(startRowKey, size);
                 int res_size=res.size();
-                startRowKey=res.get(res_size-1).get("row");
+                startRowKey=res.get(res_size-1).get("rowKey");
                 count += res_size;
-                bw.write(JsonUtil.toJson(res));
-                bw.newLine();
+                for (Map<String, String> data : res) {
+                    bw.write(data.get("message"));
+                    bw.newLine();
+                }
                 bw.flush();
                 logger.info("append cur[{}] all[{}]",res_size,count);
                 if (res.size() != size) {
@@ -460,9 +471,10 @@ public class MlService {
                 List<Map<String, String>> res = HBaseUtil.querySignals_gb(startRowKey, n2);
                 int res_size=res.size();
                 count += res_size;
-                bw.write(JsonUtil.toJson(res));
-                bw.newLine();
-                bw.flush();
+                for (Map<String, String> data : res) {
+                    bw.write(data.get("message"));
+                    bw.newLine();
+                }
                 logger.info("append cur[{}] all[{}]",res_size,count);
                 logger.info("finish all[{}]",count);
             }
@@ -471,5 +483,28 @@ public class MlService {
             throw BaseRuntimeException.getException(e);
         }
 
+    }
+
+    public int saveToMongo_gb() {
+        int count=0;
+        mongoTemplate.remove(new Query(),"signal_gb");
+        Path path=Paths.get("signal_gb.txt");
+        List<String> tempList=new ArrayList<>();
+        try (BufferedReader br = Files.newBufferedReader(path)){
+            final String data = br.readLine();
+            byte [] bytes= ByteBufUtil.decodeHexDump(data);
+            ByteBuf byteBuf= Unpooled.wrappedBuffer(bytes);
+            final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
+            tempList.add(JsonUtil.toJson(packet));
+            if(tempList.size()==10000){
+                mongoTemplate.insert(tempList,"signal_gb");
+                tempList.clear();
+            }
+            count++;
+
+        } catch (IOException e) {
+            throw BaseRuntimeException.getException(e);
+        }
+        return count;
     }
 }

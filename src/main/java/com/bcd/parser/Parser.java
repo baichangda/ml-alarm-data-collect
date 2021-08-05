@@ -29,11 +29,11 @@ import java.util.*;
  * 主要功能如下:
  * 1、解析
  * 从{@link ByteBuf}中获取二进制数据、解析成{@link Parsable}的class对象实例
- * 解析规则参照{@link com.bcd.parser.anno.PacketField}
+ * 解析规则参照{@link PacketField}
  * <p>
  * 2、反解析
  * 将{@link Parsable}的class对象实例反解析成为ByteBuf二进制数据流
- * 反解析规则参照{@link com.bcd.parser.anno.PacketField}}
+ * 反解析规则参照{@link PacketField}}
  * <p>
  * {@link FieldProcessor}说明:
  * {@link FieldProcessor}是针对每个字段类型定义的处理器、所有需要解析的字段类型必须要有对应的处理器
@@ -252,7 +252,7 @@ public abstract class Parser {
     }
 
     /**
-     * 解析{@link com.bcd.parser.anno.PacketField}字段
+     * 解析{@link PacketField}字段
      *
      * @param packetInfo    当前class对应的{@link PacketInfo}
      * @param data          解析ByteBuf数据源
@@ -337,7 +337,7 @@ public abstract class Parser {
             //构造实例
             T instance = (T) packetInfo.constructor.newInstance();
             /**
-             * 解析{@link com.bcd.parser.anno.PacketField}字段
+             * 解析{@link PacketField}字段
              */
             parsePacketField(packetInfo, data, instance, parentContext);
             return instance;

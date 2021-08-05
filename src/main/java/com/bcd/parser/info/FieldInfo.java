@@ -1,7 +1,7 @@
 package com.bcd.parser.info;
 
-import com.bcd.parser.anno.PacketField;
 import com.bcd.parser.Parser;
+import com.bcd.parser.anno.PacketField;
 import com.bcd.parser.util.RpnUtil;
 
 import java.lang.reflect.Field;

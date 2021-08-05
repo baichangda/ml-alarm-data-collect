@@ -195,6 +195,7 @@ public class HBaseUtil {
 
             for (Result r : rs) {
                 Map<String,String> data=new HashMap<>();
+                data.put("rowKey",Bytes.toString(r.getRow()));
                 for (Cell cell : r.listCells()) {
                     String column = Bytes.toString(cell.getQualifierArray(), cell.getQualifierOffset(), cell.getQualifierLength());
                     String jsonString = Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());

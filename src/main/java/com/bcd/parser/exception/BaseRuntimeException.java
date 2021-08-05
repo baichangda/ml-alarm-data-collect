@@ -3,9 +3,6 @@ package com.bcd.parser.exception;
 
 import org.slf4j.helpers.MessageFormatter;
 
-import java.text.MessageFormat;
-import java.util.Arrays;
-
 /**
  * 建造此异常类的目的:
  * 1、在所有需要抛非运行时异常的地方,用此异常包装,避免方法调用时候需要捕获异常(若是其他框架自定义的异常,请不要用此类包装)
