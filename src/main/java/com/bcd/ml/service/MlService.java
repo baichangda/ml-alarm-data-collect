@@ -446,26 +446,32 @@ public class MlService {
     }
 
     public int fetchAndSave_gb(int num) {
+        AtomicInteger count=new AtomicInteger();
+        AtomicInteger monitorCount=new AtomicInteger();
+        ScheduledExecutorService monitorPool=Executors.newSingleThreadScheduledExecutor();
+        monitorPool.scheduleWithFixedDelay(()->{
+            logger.info("fetch count:{} speed:{}",count.get(),monitorCount.getAndSet(0)/3);
+        },3,3,TimeUnit.SECONDS);
         Path path=Paths.get("signal_gb.txt");
-        int[] count=new int[1];
         try(BufferedWriter bw=Files.newBufferedWriter(path)) {
             Function<Map<String,String>,Boolean> function= e->{
                 try {
                     bw.write(e.get("message"));
                     bw.newLine();
-                    count[0]++;
+                    count.incrementAndGet();
+                    monitorCount.incrementAndGet();
                 } catch (IOException ex) {
                     throw BaseRuntimeException.getException(ex);
                 }
-                return count[0] < num;
+                return count.get() < num;
             };
             HBaseUtil.querySignals_gb(function);
             bw.flush();
         } catch (IOException e) {
             throw BaseRuntimeException.getException(e);
         }
-        logger.info("finish all[{}]",count[0]);
-        return count[0];
+        logger.info("finish all[{}]",count.get());
+        return count.get();
     }
 
     public int saveToMongo_gb() {
