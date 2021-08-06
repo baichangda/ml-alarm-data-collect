@@ -1,128 +1,148 @@
 buildscript {
     ext {
-        springBootVersion = '2.4.5'
-        lombokVersion="1.18.20"
-        mavenRepoUrl='https://maven.aliyun.com/repository/central'
+        guavaVersion = '+'
+        freemarkerVersion = '+'
+        commonsPool2 = '+'
+        disruptorVersion = '+'
+        springdocVersion = '+'
+        caffeineVersion = '2.+'
+        springBootVersion = '+'
+        lombokVersion = "+"
+        nettyVersion = '4.+'
+        mavenRepoUrl = 'https://maven.aliyun.com/repository/central'
     }
 
     repositories {
         mavenLocal()
         maven { url "${mavenRepoUrl}" }
-        mavenCentral()
     }
 
     dependencies {
         //使用springboot框架
-        classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+        classpath group: 'org.springframework.boot', name: 'spring-boot-gradle-plugin', version: "${springBootVersion}"
     }
-}
-
-
-
-/**
- * ----------------------------------------------------------------------------
- */
-
-//所有模块配置
-allprojects{
-    group 'com.bcd'
-    version '1.0'
-    apply plugin: 'java'
-    apply plugin: 'idea'
-    //加入maven发布依赖
-    apply plugin: 'io.spring.dependency-management'
-    apply plugin: 'org.springframework.boot'
-
-    sourceCompatibility = 1.8
-    targetCompatibility = 1.8
-
-    repositories {
-        mavenLocal()
-        maven { url "${mavenRepoUrl}" }
-        maven { url 'https://repository.cloudera.com/artifactory/cloudera-repos/' }
-    }
-
-    //下载源码和文档
-    //gradle cleanIdea idea
-    idea {
-        module {
-            downloadSources=true
-            downloadJavadoc=true
-        }
-    }
-    //去除springboot默认的logback
-    configurations.all {
-        exclude group:'org.springframework.boot', module: 'spring-boot-starter-logging'
-        exclude module: 'logback-classic'
-        exclude module: 'logback-core'
-    }
-
-    dependencies {
-        //邮件支持
-        compile("org.springframework.boot:spring-boot-starter-mail")
-
-        // https://mvnrepository.com/artifact/org.projectlombok/lombok
-        compileOnly group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
-        annotationProcessor group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
-
-        compile("org.apache.hbase:hbase-client:1.2.0-cdh5.13.1"){
-            exclude module: "servlet-api"
-            exclude module: "slf4j-log4j12"
-            exclude module: "gson"
-        }
-
-    }
-
-    //生成jar时打包源码
-    task sourceJar(type: Jar) {
-        from sourceSets.main.java.srcDirs
-        classifier "sources"
-    }
-
-    jar {
-        enabled = true
-    }
-
-
-
-    /**
-     * SpringBoot 2开始,使用gradle bootJar进行打包,并要配置入口类
-     */
-    bootJar {
-        manifest {
-            attributes 'Start-Class': 'com.bcd.Application'
-        }
-    }
-
 }
 
 /**
  * ----------------------------------------------------------------------------
  */
 
+group 'com.bcd'
+version '1.0'
+apply plugin: 'java-library'
+apply plugin: 'java'
+apply plugin: 'idea'
+//加入maven发布依赖
+apply plugin: 'io.spring.dependency-management'
+apply plugin: 'org.springframework.boot'
 
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenLocal()
+    maven { url "${mavenRepoUrl}" }
+    maven { url 'https://repository.cloudera.com/artifactory/cloudera-repos/' }
+}
+
+//下载源码和文档
+//gradle cleanIdea idea
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}
+
+//去除springboot默认的logback
+configurations.all {
+    exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    exclude module: 'logback-classic'
+    exclude module: 'logback-core'
+}
+
+dependencies {
+    // https://mvnrepository.com/artifact/org.projectlombok/lombok
+    compileOnly group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: "${lombokVersion}"
+    // https://mvnrepository.com/artifact/com.google.code.findbugs/annotations
+    implementation group: 'com.google.code.findbugs', name: 'annotations', version: '3.0.1'
+
+    //springboot支持
+    implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.boot:spring-boot-configuration-processor")
+    //springboot aop支持
+    implementation("org.springframework.boot:spring-boot-starter-aop")
+    //springboot web支持
+    implementation("org.springframework.boot:spring-boot-starter-web")
+
+    //springboot log4j2支持
+    implementation('org.springframework.boot:spring-boot-starter-log4j2')
+    //disruptor(log4j2异步日志需要用到)
+    implementation group: 'com.lmax', name: 'disruptor', version: "${disruptorVersion}"
+
+    //springboot validation支持
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+
+    //springboot mongodb支持
+    implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
+
+    // https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-ui
+    implementation group: 'org.springdoc', name: 'springdoc-openapi-ui', version: "${springdocVersion}"
+
+    // https://mvnrepository.com/artifact/org.freemarker/freemarker
+    implementation group: 'org.freemarker', name: 'freemarker', version: "${freemarkerVersion}"
+
+    implementation("org.apache.hbase:hbase-client:1.2.0-cdh5.13.1"){
+        exclude module: "servlet-api"
+        exclude module: "slf4j-log4j12"
+        exclude module: "gson"
+    }
+
+    //集成netty
+    implementation group: 'io.netty', name: 'netty-buffer', version: "${nettyVersion}"
+
+
+}
+
+//生成jar时打包源码
+task sourceJar(type: Jar) {
+    from sourceSets.main.java.srcDirs
+    classifier "sources"
+}
+
+jar {
+    enabled = true
+}
+
+
+/**
+ * SpringBoot 2开始,使用gradle bootJar进行打包,并要配置入口类
+ */
+bootJar {
+    manifest {
+        attributes 'Start-Class': 'com.bcd.Application'
+    }
+}
+
+
+/**
+ * ----------------------------------------------------------------------------
+ */
 bootRun {
     /**
      * 启动时候带入jvm的参数;如下(启动jvisualvm监控)
      * nohup gradle bootRun -PjvmArgs="-Djava.rmi.server.hostname=172.16.24.36 -Dcom.sun.management.jmxremote.port=10001 -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.authenticate=true" &
      */
-    List args=new ArrayList<>();
+
     if (project.hasProperty('jvmArgs')) {
-        args.addAll(project.jvmArgs.split("\\s+") as List)
+        jvmArgs.addAll(project.jvmArgs.split("\\s+") as List)
     }
     //开启缓存行补齐
-    args.add('-XX:-RestrictContended')
-    args.add('-Dfile.encoding=UTF-8')
-
-    jvmArgs(args)
+    jvmArgs('-XX:-RestrictContended')
+    jvmArgs('-Dfile.encoding=UTF-8')
+    //log4j2全局异步日志
+    jvmArgs('-DLog4jContextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector')
 }
 
 
-
-/**
- * ----------------------------------------------------------------------------
- */
-
-dependencies {
-    compile project(':MongoDB')
-}

@@ -3,7 +3,7 @@ package com.bcd.ml.service;
 import com.bcd.base.exception.BaseRuntimeException;
 import com.bcd.base.util.DateZoneUtil;
 import com.bcd.base.util.JsonUtil;
-import com.bcd.config.hbase.HBaseUtil;
+import com.bcd.base.support_hbase.HBaseUtil;
 import com.bcd.parser.impl.gb32960.Parser_gb32960;
 import com.bcd.parser.impl.gb32960.data.Packet;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -36,7 +36,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
+import java.util.function.Function;
 
 @Service
 public class MlService {
@@ -447,45 +447,25 @@ public class MlService {
 
     public int fetchAndSave_gb(int num) {
         Path path=Paths.get("signal_gb.txt");
-        int count=0;
-        int size=10000;
-        int n1=num/size;
-        int n2=num%size;
-        String startRowKey=null;
+        int[] count=new int[1];
         try(BufferedWriter bw=Files.newBufferedWriter(path)) {
-            for (int i = 0; i < n1; i++) {
-                List<Map<String, String>> res = HBaseUtil.querySignals_gb(startRowKey, size);
-                int res_size=res.size();
-                startRowKey=res.get(res_size-1).get("rowKey");
-                count += res_size;
-                for (Map<String, String> data : res) {
-                    bw.write(data.get("message"));
+            Function<Map<String,String>,Boolean> function= e->{
+                try {
+                    bw.write(e.get("message"));
                     bw.newLine();
+                    count[0]++;
+                } catch (IOException ex) {
+                    throw BaseRuntimeException.getException(ex);
                 }
-                bw.flush();
-                logger.info("append cur[{}] all[{}]",res_size,count);
-                if (res.size() != size) {
-                    //说明没有数据了
-                    logger.info("finish with no more data all[{}]",count);
-                    return count;
-                }
-            }
-            if(n2>0) {
-                List<Map<String, String>> res = HBaseUtil.querySignals_gb(startRowKey, n2);
-                int res_size=res.size();
-                count += res_size;
-                for (Map<String, String> data : res) {
-                    bw.write(data.get("message"));
-                    bw.newLine();
-                }
-                logger.info("append cur[{}] all[{}]",res_size,count);
-                logger.info("finish all[{}]",count);
-            }
-            return count;
+                return count[0] < num;
+            };
+            HBaseUtil.querySignals_gb(function);
+            bw.flush();
         } catch (IOException e) {
             throw BaseRuntimeException.getException(e);
         }
-
+        logger.info("finish all[{}]",count[0]);
+        return count[0];
     }
 
     public int saveToMongo_gb() {

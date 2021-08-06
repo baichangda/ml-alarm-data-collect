@@ -21,27 +21,27 @@ public class MlController {
     @Operation(description = "获取报警数据和信号数据并保存文件")
     @ApiResponse(responseCode = "200", description = "获取报警数据和信号数据并保存文件")
     public JsonMessage<int[]> fetchAndSave(@RequestParam int flag){
-        return JsonMessage.<int[]>success().withData(mlService.fetchAndSave(flag));
+        return JsonMessage.success(mlService.fetchAndSave(flag));
     }
 
     @RequestMapping(value = "/saveToMongo", method = RequestMethod.GET)
     @Operation(description = "解析数据文件保存到mongo")
     @ApiResponse(responseCode = "200", description = "解析数据文件保存到mongo")
     public JsonMessage<int[]> saveToMongo(@RequestParam int flag){
-        return JsonMessage.<int[]>success().withData(mlService.saveToMongo(flag));
+        return JsonMessage.success(mlService.saveToMongo(flag));
     }
 
     @RequestMapping(value = "/fetchAndSave_gb", method = RequestMethod.GET)
     @Operation(description = "获取国标信号数据并保存文件")
     @ApiResponse(responseCode = "200", description = "获取报警数据和信号数据并保存文件")
     public JsonMessage<Integer> fetchAndSave_gb(@RequestParam(defaultValue = "10000000") int num){
-        return JsonMessage.<Integer>success().withData(mlService.fetchAndSave_gb(num));
+        return JsonMessage.success(mlService.fetchAndSave_gb(num));
     }
 
     @RequestMapping(value = "/saveToMongo_gb", method = RequestMethod.GET)
     @Operation(description = "解析数据文件保存到mongo")
     @ApiResponse(responseCode = "200", description = "解析数据文件保存到mongo")
     public JsonMessage<Integer> saveToMongo(){
-        return JsonMessage.<Integer>success().withData(mlService.saveToMongo_gb());
+        return JsonMessage.success(mlService.saveToMongo_gb());
     }
 }

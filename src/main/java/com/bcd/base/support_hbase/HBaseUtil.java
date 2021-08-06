@@ -1,4 +1,4 @@
-package com.bcd.config.hbase;
+package com.bcd.base.support_hbase;
 
 import com.bcd.base.exception.BaseRuntimeException;
 import org.apache.commons.codec.binary.Hex;
@@ -23,7 +23,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 
@@ -394,7 +393,7 @@ public class HBaseUtil {
     public static void queryData(String startRowKey, String endRowKey, String tableName, Integer pageSize, Boolean reverseOrder,Function<Map<String,String>,Boolean> function) {
 
         Scan scan = new Scan();
-
+        scan.setCaching(3000);
         if(pageSize != null && pageSize > 0){
             Filter filter = new PageFilter(pageSize);
             scan.setFilter(filter);
