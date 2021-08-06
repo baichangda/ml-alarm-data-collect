@@ -469,6 +469,15 @@ public class MlService {
             bw.flush();
         } catch (IOException e) {
             throw BaseRuntimeException.getException(e);
+        }finally {
+            monitorPool.shutdown();
+            try {
+                while (!monitorPool.awaitTermination(60, TimeUnit.SECONDS)) {
+
+                }
+            }catch (InterruptedException ex){
+                logger.error("interrupted",ex);
+            }
         }
         logger.info("finish all[{}]",count.get());
         return count.get();
