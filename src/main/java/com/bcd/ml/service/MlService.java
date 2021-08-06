@@ -484,7 +484,13 @@ public class MlService {
     }
 
     public int saveToMongo_gb() {
-        int count=0;
+        AtomicInteger count=new AtomicInteger();
+        AtomicInteger monitorCount=new AtomicInteger();
+        ScheduledExecutorService monitorPool=Executors.newSingleThreadScheduledExecutor();
+        monitorPool.scheduleWithFixedDelay(()->{
+            logger.info("fetch count:{} speed:{}",count.get(),monitorCount.getAndSet(0)/3);
+        },3,3,TimeUnit.SECONDS);
+
         mongoTemplate.remove(new Query(),"signal_gb");
         Path path=Paths.get("signal_gb.txt");
         List<String> tempList=new ArrayList<>();
@@ -499,14 +505,24 @@ public class MlService {
                     mongoTemplate.insert(tempList,"signal_gb");
                     tempList.clear();
                 }
-                count++;
+                count.incrementAndGet();
+                monitorCount.incrementAndGet();
             }
             if(tempList.size()>0){
                 mongoTemplate.insert(tempList,"signal_gb");
             }
         } catch (IOException e) {
             throw BaseRuntimeException.getException(e);
+        }finally {
+            monitorPool.shutdown();
+            try {
+                while (!monitorPool.awaitTermination(60, TimeUnit.SECONDS)) {
+
+                }
+            }catch (InterruptedException ex){
+                logger.error("interrupted",ex);
+            }
         }
-        return count;
+        return count.get();
     }
 }
