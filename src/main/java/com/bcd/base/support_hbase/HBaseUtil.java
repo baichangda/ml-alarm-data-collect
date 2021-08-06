@@ -23,6 +23,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 
 @Configuration
@@ -84,16 +86,9 @@ public class HBaseUtil {
         return queryJsonData(vin, startTime, endTime, table);
     }
 
-    public static List<Map<String,String>> querySignals_gb(String vin, Date startTime, Date endTime){
-        String startRowKey = makeDeliveryMessageMinRowKey(vin, startTime.getTime()+"");
-        String endRowKey = makeDeliveryMessageMinRowKey(vin, endTime.getTime()+"");
 
-        List<Map<String,String>> res = queryData(startRowKey, endRowKey, DELIVERY_TABLE_NAME, null, false);
-        return res;
-    }
-
-    public static List<Map<String,String>> querySignals_gb(String startRowKey,int pageSize){
-        return queryData(startRowKey, null, DELIVERY_TABLE_NAME, pageSize, false);
+    public static void querySignals_gb(Function<Map<String,String>,Boolean> function){
+        queryData(null, null, DELIVERY_TABLE_NAME, null, false,function);
     }
 
 
@@ -396,7 +391,7 @@ public class HBaseUtil {
     }
 
 
-    public static List<Map<String, String>> queryData(String startRowKey, String endRowKey, String tableName, Integer pageSize, Boolean reverseOrder) {
+    public static void queryData(String startRowKey, String endRowKey, String tableName, Integer pageSize, Boolean reverseOrder,Function<Map<String,String>,Boolean> function) {
 
         Scan scan = new Scan();
 
@@ -419,7 +414,56 @@ public class HBaseUtil {
             }
         }
 
-        return queryDataMap(tableName, scan);
+        queryDataMap(tableName, scan,function);
+    }
+
+    /**
+     * 00
+     * 通过表名以及过滤条件查询数据
+     *
+     * @param tableName 表名
+     * @param scan      过滤条件
+     * @return List<T>
+     * @author sunjun
+     * @date 2018/10/23 10:13
+     * @since 1.0.0
+     */
+    private static void queryDataMap(String tableName, Scan scan,Function<Map<String,String>,Boolean> function) {
+        ResultScanner rs = null;
+        // 获取表
+        Table table = null;
+        try {
+            table = getTable(tableName);
+            rs = table.getScanner(scan);
+
+            for (Result r : rs) {
+                Map<String,String> data=new HashMap<>();
+                data.put("rowKey",Bytes.toString(r.getRow()));
+                for (Cell cell : r.listCells()) {
+                    String column = Bytes.toString(cell.getQualifierArray(), cell.getQualifierOffset(), cell.getQualifierLength());
+                    String jsonString = Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
+                    if (StringUtils.isNotBlank(jsonString)) {
+                        try {
+                            data.put(column,jsonString);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            logger.error("数据转换异常:{0}", jsonString);
+                        }
+                    }
+                }
+                boolean res=function.apply(data);
+                if (!res){
+                    break;
+                }
+            }
+        } catch (IOException e) {
+            logger.error(MessageFormat.format("遍历查询指定表中的所有数据失败,tableName:{0}"
+                    , tableName), e);
+            e.printStackTrace();
+        } finally {
+            close(null, rs, table);
+        }
+
     }
 
 }
