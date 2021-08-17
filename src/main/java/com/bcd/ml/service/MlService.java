@@ -4,11 +4,13 @@ import com.bcd.base.exception.BaseRuntimeException;
 import com.bcd.base.util.DateZoneUtil;
 import com.bcd.base.util.JsonUtil;
 import com.bcd.base.support_hbase.HBaseUtil;
+import com.bcd.base.util.StringUtil;
 import com.bcd.parser.impl.gb32960.Parser_gb32960;
 import com.bcd.parser.impl.gb32960.data.Packet;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.base.Strings;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -494,12 +496,18 @@ public class MlService {
         mongoTemplate.remove(new Query(),"signal_gb");
         Path path=Paths.get("signal_gb.txt");
         List<String> tempList=new ArrayList<>();
+        AtomicInteger vinNum=new AtomicInteger(1);
+        Map<String,String> vin_randomVin=new HashMap<>();
         try (BufferedReader br = Files.newBufferedReader(path)){
             String line;
             while((line = br.readLine())!=null){
                 byte [] bytes= ByteBufUtil.decodeHexDump(line);
                 ByteBuf byteBuf= Unpooled.wrappedBuffer(bytes);
                 final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
+                //数据脱敏处理
+                packet.setVin(vin_randomVin.computeIfAbsent(packet.getVin(),e->{
+                    return "TEST"+ Strings.padStart(""+vinNum.getAndIncrement(),13,'0');
+                }));
                 tempList.add(JsonUtil.toJson(packet));
                 if(tempList.size()==10000){
                     mongoTemplate.insert(tempList,"signal_gb");
