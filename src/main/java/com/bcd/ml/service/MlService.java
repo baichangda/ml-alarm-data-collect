@@ -62,6 +62,9 @@ public class MlService {
     @Value("${signalSourcePath}")
     String signalSourcePath;
 
+    @Value("${gb_signalSourcePath}")
+    String gb_signalSourcePath;
+
     @Autowired
     MongoTemplate mongoTemplate;
 
@@ -454,7 +457,7 @@ public class MlService {
         monitorPool.scheduleWithFixedDelay(()->{
             logger.info("fetch count:{} speed:{}",count.get(),monitorCount.getAndSet(0)/3);
         },3,3,TimeUnit.SECONDS);
-        Path path=Paths.get("signal_gb.txt");
+        Path path=Paths.get(gb_signalSourcePath);
         try(BufferedWriter bw=Files.newBufferedWriter(path)) {
             Function<Map<String,String>,Boolean> function= e->{
                 try {
@@ -494,7 +497,7 @@ public class MlService {
         },3,3,TimeUnit.SECONDS);
 
         mongoTemplate.remove(new Query(),"signal_gb");
-        Path path=Paths.get("signal_gb.txt");
+        Path path=Paths.get(gb_signalSourcePath);
         List<String> tempList=new ArrayList<>();
         AtomicInteger vinNum=new AtomicInteger(1);
         Map<String,String> vin_randomVin=new HashMap<>();

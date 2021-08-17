@@ -47,3 +47,5 @@ alarmTimeOffset: 60
 
 alarmSourcePath: alarm.txt
 signalSourcePath: signal.txt
+
+gb_signalSourcePath: signal_gb.txt
