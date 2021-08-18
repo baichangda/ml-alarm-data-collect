@@ -6,9 +6,7 @@ import com.bcd.base.util.JsonUtil;
 import com.bcd.base.support_hbase.HBaseUtil;
 import com.bcd.base.util.StringUtil;
 import com.bcd.parser.impl.gb32960.Parser_gb32960;
-import com.bcd.parser.impl.gb32960.data.Packet;
-import com.bcd.parser.impl.gb32960.data.VehicleCommonData;
-import com.bcd.parser.impl.gb32960.data.VehicleRealData;
+import com.bcd.parser.impl.gb32960.data.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -522,17 +520,27 @@ public class MlService {
                 byte[] bytes = ByteBufUtil.decodeHexDump(line);
                 ByteBuf byteBuf = Unpooled.wrappedBuffer(bytes);
                 final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
-                VehicleRealData vehicleRealData = (VehicleRealData) packet.getData();
                 Map<String, Object> curDataMap = new HashMap<>();
                 //数据脱敏处理
                 String vin=vin_randomVin.computeIfAbsent(packet.getVin(), e -> {
                     return "TEST" + Strings.padStart("" + vinNum.getAndIncrement(), 13, '0');
                 });
                 curDataMap.put("vin", vin);
-                curDataMap.put("collectTime", vehicleRealData.getCollectTime());
+                PacketData packetData = packet.getData();
+                VehicleCommonData vehicleCommonData;
+                if(packetData instanceof VehicleRealData){
+                    vehicleCommonData=((VehicleRealData) packetData).getVehicleCommonData();
+                    curDataMap.put("collectTime", ((VehicleRealData) packetData).getCollectTime());
+                }else if (packetData instanceof VehicleSupplementData){
+                    vehicleCommonData=((VehicleSupplementData) packetData).getVehicleCommonData();
+                    curDataMap.put("collectTime", ((VehicleSupplementData) packetData).getCollectTime());
+                }else{
+                    logger.info("discard data[{}],because PacketData class is {}",line,packetData.getClass().getName());
+                    continue;
+                }
                 for (Object[] objects : vehicleCommonDataFieldList) {
                     Field f1 = (Field) objects[0];
-                    Object o1 = f1.get(vehicleRealData.getVehicleCommonData());
+                    Object o1 = f1.get(vehicleCommonData);
                     if (o1!=null) {
                         Field[] f2_arr = (Field[]) objects[1];
                         for (Field f2 : f2_arr) {
