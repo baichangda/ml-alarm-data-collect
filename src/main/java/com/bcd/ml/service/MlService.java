@@ -520,7 +520,7 @@ public class MlService {
                     }
                     @Override
                     public void doAfterAllAnalysed(AnalysisContext context) {
-                        logger.info("finish read excel");
+                        logger.info("finish read excel count[{}]",vinToVehicleType.size());
                     }
                 }).doReadAll();
         return vinToVehicleType;
