@@ -7,6 +7,8 @@ import com.bcd.base.support_hbase.HBaseUtil;
 import com.bcd.base.util.StringUtil;
 import com.bcd.parser.impl.gb32960.Parser_gb32960;
 import com.bcd.parser.impl.gb32960.data.Packet;
+import com.bcd.parser.impl.gb32960.data.VehicleCommonData;
+import com.bcd.parser.impl.gb32960.data.VehicleRealData;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Service;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -68,9 +71,10 @@ public class MlService {
     @Autowired
     MongoTemplate mongoTemplate;
 
-    DateTimeFormatter formatter=DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
 
-    Parser_gb32960 parser_gb32960=new Parser_gb32960(false);
+    Parser_gb32960 parser_gb32960 = new Parser_gb32960(false);
+
     {
         parser_gb32960.init();
     }
@@ -92,7 +96,7 @@ public class MlService {
 
         int batch = 1000;
         alarmPool.execute(() -> {
-            mongoTemplate.remove(new Query(),"alarm_all");
+            mongoTemplate.remove(new Query(), "alarm_all");
             try (BufferedReader br = Files.newBufferedReader(Paths.get(alarmSourcePath))) {
                 List<String> tempList = new ArrayList<>();
                 String line;
@@ -113,8 +117,8 @@ public class MlService {
             }
         });
 
-        if(flag==1){
-            mongoTemplate.remove(new Query(),"signal_all");
+        if (flag == 1) {
+            mongoTemplate.remove(new Query(), "signal_all");
             try (BufferedReader br = Files.newBufferedReader(Paths.get(signalSourcePath))) {
                 List<String> tempList = new ArrayList<>();
                 String line;
@@ -154,7 +158,6 @@ public class MlService {
     }
 
     /**
-     *
      * @param flag 是否转换
      * @return
      */
@@ -248,7 +251,7 @@ public class MlService {
             }
             try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(signalsFilePath), StandardOpenOption.APPEND)) {
                 while (!stop.get()) {
-                    String signalJsonStr= signalQueue.poll(3, TimeUnit.SECONDS);
+                    String signalJsonStr = signalQueue.poll(3, TimeUnit.SECONDS);
                     if (signalJsonStr != null) {
                         bw.write(signalJsonStr);
                         bw.newLine();
@@ -298,8 +301,8 @@ public class MlService {
                                     allProcessedAlarmCount.incrementAndGet();
                                     alarmQueue.put(alarm);
                                     for (String[] arr : signals) {
-                                        String signalTime=arr[0].substring(29,43);
-                                        String signalJson=arr[1];
+                                        String signalTime = arr[0].substring(29, 43);
+                                        String signalJson = arr[1];
                                         JsonNode jsonNode = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(signalJson);
                                         JsonNode json = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(jsonNode.get("json").asText());
                                         String key3 = vin + "-" + signalTime;
@@ -311,7 +314,7 @@ public class MlService {
                                                     set3.add(key3);
                                                 }
                                             }
-                                            if(flag==1){
+                                            if (flag == 1) {
                                                 List<JsonNode> groupList = new ArrayList<>();
                                                 for (JsonNode group : json.get("channels")) {
                                                     groupList.add(group.get("data"));
@@ -335,7 +338,7 @@ public class MlService {
                                                             }
                                                         });
                                                     }
-                                                    data.put("collectDate", LongNode.valueOf(Instant.from(formatter.parse(signalTime)).getEpochSecond()+ j));
+                                                    data.put("collectDate", LongNode.valueOf(Instant.from(formatter.parse(signalTime)).getEpochSecond() + j));
                                                     data.put("vin", TextNode.valueOf(vin));
                                                     data.put("vehicleType", TextNode.valueOf(alarm.get("vehicleType")));
                                                     dataList.add(data);
@@ -345,7 +348,7 @@ public class MlService {
                                                 for (Map<String, JsonNode> data : dataList) {
                                                     signalQueue.put(JsonUtil.toJson(data));
                                                 }
-                                            }else{
+                                            } else {
                                                 processedSignalCount.incrementAndGet();
                                                 allProcessedSignalCount.incrementAndGet();
                                                 signalQueue.put(signalJson);
@@ -451,15 +454,15 @@ public class MlService {
     }
 
     public int fetchAndSave_gb(int num) {
-        AtomicInteger count=new AtomicInteger();
-        AtomicInteger monitorCount=new AtomicInteger();
-        ScheduledExecutorService monitorPool=Executors.newSingleThreadScheduledExecutor();
-        monitorPool.scheduleWithFixedDelay(()->{
-            logger.info("fetch count:{} speed:{}",count.get(),monitorCount.getAndSet(0)/3);
-        },3,3,TimeUnit.SECONDS);
-        Path path=Paths.get(gb_signalSourcePath);
-        try(BufferedWriter bw=Files.newBufferedWriter(path)) {
-            Function<Map<String,String>,Boolean> function= e->{
+        AtomicInteger count = new AtomicInteger();
+        AtomicInteger monitorCount = new AtomicInteger();
+        ScheduledExecutorService monitorPool = Executors.newSingleThreadScheduledExecutor();
+        monitorPool.scheduleWithFixedDelay(() -> {
+            logger.info("fetch count:{} speed:{}", count.get(), monitorCount.getAndSet(0) / 3);
+        }, 3, 3, TimeUnit.SECONDS);
+        Path path = Paths.get(gb_signalSourcePath);
+        try (BufferedWriter bw = Files.newBufferedWriter(path)) {
+            Function<Map<String, String>, Boolean> function = e -> {
                 try {
                     bw.write(e.get("message"));
                     bw.newLine();
@@ -474,64 +477,89 @@ public class MlService {
             bw.flush();
         } catch (IOException e) {
             throw BaseRuntimeException.getException(e);
-        }finally {
+        } finally {
             monitorPool.shutdown();
             try {
                 while (!monitorPool.awaitTermination(60, TimeUnit.SECONDS)) {
 
                 }
-            }catch (InterruptedException ex){
-                logger.error("interrupted",ex);
+            } catch (InterruptedException ex) {
+                logger.error("interrupted", ex);
             }
         }
-        logger.info("finish all[{}]",count.get());
+        logger.info("finish all[{}]", count.get());
         return count.get();
     }
 
     public int saveToMongo_gb() {
-        AtomicInteger count=new AtomicInteger();
-        AtomicInteger monitorCount=new AtomicInteger();
-        ScheduledExecutorService monitorPool=Executors.newSingleThreadScheduledExecutor();
-        monitorPool.scheduleWithFixedDelay(()->{
-            logger.info("fetch count:{} speed:{}",count.get(),monitorCount.getAndSet(0)/3);
-        },3,3,TimeUnit.SECONDS);
+        AtomicInteger count = new AtomicInteger();
+        AtomicInteger monitorCount = new AtomicInteger();
+        ScheduledExecutorService monitorPool = Executors.newSingleThreadScheduledExecutor();
+        monitorPool.scheduleWithFixedDelay(() -> {
+            logger.info("fetch count:{} speed:{}", count.get(), monitorCount.getAndSet(0) / 3);
+        }, 3, 3, TimeUnit.SECONDS);
 
-        mongoTemplate.remove(new Query(),"signal_gb");
-        Path path=Paths.get(gb_signalSourcePath);
-        List<String> tempList=new ArrayList<>();
-        AtomicInteger vinNum=new AtomicInteger(1);
-        Map<String,String> vin_randomVin=new HashMap<>();
-        try (BufferedReader br = Files.newBufferedReader(path)){
+        mongoTemplate.remove(new Query(), "signal_gb");
+        Path path = Paths.get(gb_signalSourcePath);
+        List<String> tempList = new ArrayList<>();
+        AtomicInteger vinNum = new AtomicInteger(1);
+        Map<String, String> vin_randomVin = new HashMap<>();
+
+        List<Object[]> vehicleCommonDataFieldList = new ArrayList<>();
+        Field[] declaredFields = VehicleCommonData.class.getDeclaredFields();
+        for (Field declaredField : declaredFields) {
+            declaredField.setAccessible(true);
+            Field[] innerDeclaredFields = declaredField.getType().getDeclaredFields();
+            for (Field innerDeclaredField : innerDeclaredFields) {
+                innerDeclaredField.setAccessible(true);
+            }
+            vehicleCommonDataFieldList.add(new Object[]{declaredField, innerDeclaredFields});
+        }
+
+        try (BufferedReader br = Files.newBufferedReader(path)) {
             String line;
-            while((line = br.readLine())!=null){
-                byte [] bytes= ByteBufUtil.decodeHexDump(line);
-                ByteBuf byteBuf= Unpooled.wrappedBuffer(bytes);
+            while ((line = br.readLine()) != null) {
+                byte[] bytes = ByteBufUtil.decodeHexDump(line);
+                ByteBuf byteBuf = Unpooled.wrappedBuffer(bytes);
                 final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
+                VehicleRealData vehicleRealData = (VehicleRealData) packet.getData();
+                Map<String, Object> curDataMap = new HashMap<>();
+                curDataMap.put("vin", packet.getVin());
+                curDataMap.put("collectTime", vehicleRealData.getCollectTime());
+                for (Object[] objects : vehicleCommonDataFieldList) {
+                    Field f1 = (Field) objects[0];
+                    Object o1 = f1.get(packet);
+                    Field[] f2_arr = (Field[]) objects[1];
+                    for (Field f2 : f2_arr) {
+                        Object o2 = f2.get(o1);
+                        curDataMap.put(f1.getName() + "_" + f2.getName(), o2);
+                    }
+                }
                 //数据脱敏处理
-                packet.setVin(vin_randomVin.computeIfAbsent(packet.getVin(),e->{
-                    return "TEST"+ Strings.padStart(""+vinNum.getAndIncrement(),13,'0');
+                packet.setVin(vin_randomVin.computeIfAbsent(packet.getVin(), e -> {
+                    return "TEST" + Strings.padStart("" + vinNum.getAndIncrement(), 13, '0');
                 }));
                 tempList.add(JsonUtil.toJson(packet));
-                if(tempList.size()==10000){
-                    mongoTemplate.insert(tempList,"signal_gb");
+                if (tempList.size() == 10000) {
+                    mongoTemplate.insert(tempList, "signal_gb");
                     tempList.clear();
                 }
                 count.incrementAndGet();
                 monitorCount.incrementAndGet();
             }
-            if(tempList.size()>0){
-                mongoTemplate.insert(tempList,"signal_gb");
+            if (tempList.size() > 0) {
+                mongoTemplate.insert(tempList, "signal_gb");
             }
-        } catch (IOException e) {
+        } catch (IOException | IllegalAccessException e) {
             throw BaseRuntimeException.getException(e);
-        }finally {
+        } finally {
             monitorPool.shutdown();
             try {
                 while (!monitorPool.awaitTermination(60, TimeUnit.SECONDS)) {
 
                 }
-            }catch (InterruptedException ex){
-                logger.error("interrupted",ex);
+            } catch (InterruptedException ex) {
+                logger.error("interrupted", ex);
             }
         }
         return count.get();
