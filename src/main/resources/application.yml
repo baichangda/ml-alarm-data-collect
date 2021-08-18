@@ -48,3 +48,5 @@ alarmTimeOffset: 60
 alarmSourcePath: alarm.txt
 signalSourcePath: signal.txt
 gb_signalSourcePath: signal_gb.txt
+vehicleInfoPath: /Users/baichangda/Downloads/vehicleInfo.xlsx
+vehicleInfoPwd: bwwbn@rvm

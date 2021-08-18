@@ -6,6 +6,7 @@ buildscript {
         disruptorVersion = '+'
         springdocVersion = '+'
         caffeineVersion = '2.+'
+        easyexcelVersion='+'
         springBootVersion = '+'
         lombokVersion = "+"
         nettyVersion = '4.+'
@@ -100,6 +101,9 @@ dependencies {
 
     //集成netty
     implementation group: 'io.netty', name: 'netty-buffer', version: "${nettyVersion}"
+
+    // https://mvnrepository.com/artifact/com.alibaba/easyexcel
+    implementation group: 'com.alibaba', name: 'easyexcel', version: "${easyexcelVersion}"
 
 
 }

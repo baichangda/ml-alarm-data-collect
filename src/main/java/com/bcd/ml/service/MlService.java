@@ -1,10 +1,14 @@
 package com.bcd.ml.service;
 
+import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.event.AbstractIgnoreExceptionReadListener;
+import com.alibaba.excel.event.AnalysisEventListener;
+import com.alibaba.excel.event.SyncReadListener;
 import com.bcd.base.exception.BaseRuntimeException;
 import com.bcd.base.util.DateZoneUtil;
 import com.bcd.base.util.JsonUtil;
 import com.bcd.base.support_hbase.HBaseUtil;
-import com.bcd.base.util.StringUtil;
 import com.bcd.parser.impl.gb32960.Parser_gb32960;
 import com.bcd.parser.impl.gb32960.data.*;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -14,6 +18,11 @@ import com.google.common.base.Strings;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
+import org.apache.poi.poifs.filesystem.DocumentFactoryHelper;
+import org.apache.poi.poifs.filesystem.POIFSFileSystem;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +34,7 @@ import org.springframework.stereotype.Service;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,6 +50,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class MlService {
@@ -65,6 +76,12 @@ public class MlService {
 
     @Value("${gb_signalSourcePath}")
     String gb_signalSourcePath;
+
+    @Value("${vehicleInfoPath}")
+    String vehicleInfoPath;
+
+    @Value("${vehicleInfoPwd}")
+    String vehicleInfoPwd;
 
     @Autowired
     MongoTemplate mongoTemplate;
@@ -489,7 +506,30 @@ public class MlService {
         return count.get();
     }
 
+    public Map<String,String> initVinToVehicleType(){
+        Map<String,String> vinToVehicleType=new HashMap<>();
+        EasyExcel.read(vehicleInfoPath).password(vehicleInfoPwd)
+                .registerReadListener(new AnalysisEventListener() {
+                    @Override
+                    public void invoke(Object data, AnalysisContext context) {
+                        final String vin = Optional.ofNullable(((LinkedHashMap<Integer, Object>) data).get(0)).map(Object::toString).orElse(null);
+                        final String vehicleType = Optional.ofNullable(((LinkedHashMap<Integer, Object>) data).get(2)).map(Object::toString).orElse(null);
+                        if(vin!=null&&vehicleType!=null){
+                            vinToVehicleType.put(vin,vehicleType);
+                        }
+                    }
+                    @Override
+                    public void doAfterAllAnalysed(AnalysisContext context) {
+                        logger.info("finish read excel");
+                    }
+                }).doReadAll();
+        return vinToVehicleType;
+    }
+
     public int saveToMongo_gb() {
+
+        Map<String, String> vinToVehicleType = initVinToVehicleType();
+
         AtomicInteger count = new AtomicInteger();
         AtomicInteger monitorCount = new AtomicInteger();
         ScheduledExecutorService monitorPool = Executors.newSingleThreadScheduledExecutor();
@@ -521,11 +561,17 @@ public class MlService {
                 ByteBuf byteBuf = Unpooled.wrappedBuffer(bytes);
                 final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
                 Map<String, Object> curDataMap = new HashMap<>();
+                String vehicleType = vinToVehicleType.get(packet.getVin());
+                if(vehicleType==null){
+                    logger.info("vin[{}] no mapped vehicleType,discard data[{}]",packet.getVin(),line);
+                    continue;
+                }
                 //数据脱敏处理
                 String vin=vin_randomVin.computeIfAbsent(packet.getVin(), e -> {
                     return "TEST" + Strings.padStart("" + vinNum.getAndIncrement(), 13, '0');
                 });
                 curDataMap.put("vin", vin);
+                curDataMap.put("vehicleType", vehicleType);
                 PacketData packetData = packet.getData();
                 VehicleCommonData vehicleCommonData;
                 if(packetData instanceof VehicleRealData){
@@ -535,7 +581,7 @@ public class MlService {
                     vehicleCommonData=((VehicleSupplementData) packetData).getVehicleCommonData();
                     curDataMap.put("collectTime", ((VehicleSupplementData) packetData).getCollectTime());
                 }else{
-                    logger.info("discard data[{}],because PacketData class is {}",line,packetData.getClass().getName());
+                    logger.info("PacketData class is [{}],discard data[{}]",packetData.getClass().getName(),line);
                     continue;
                 }
                 for (Object[] objects : vehicleCommonDataFieldList) {
@@ -551,12 +597,12 @@ public class MlService {
                 }
 
                 tempList.add(JsonUtil.toJson(curDataMap));
+                count.incrementAndGet();
+                monitorCount.incrementAndGet();
                 if (tempList.size() == 10000) {
                     mongoTemplate.insert(tempList, "signal_gb");
                     tempList.clear();
                 }
-                count.incrementAndGet();
-                monitorCount.incrementAndGet();
             }
             if (tempList.size() > 0) {
                 mongoTemplate.insert(tempList, "signal_gb");
