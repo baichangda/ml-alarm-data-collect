@@ -533,10 +533,12 @@ public class MlService {
                 for (Object[] objects : vehicleCommonDataFieldList) {
                     Field f1 = (Field) objects[0];
                     Object o1 = f1.get(vehicleRealData.getVehicleCommonData());
-                    Field[] f2_arr = (Field[]) objects[1];
-                    for (Field f2 : f2_arr) {
-                        Object o2 = f2.get(o1);
-                        curDataMap.put(f1.getName() + "_" + f2.getName(), o2);
+                    if (o1!=null) {
+                        Field[] f2_arr = (Field[]) objects[1];
+                        for (Field f2 : f2_arr) {
+                            Object o2 = f2.get(o1);
+                            curDataMap.put(f1.getName() + "_" + f2.getName(), o2);
+                        }
                     }
                 }
 
