@@ -532,7 +532,7 @@ public class MlService {
                 curDataMap.put("collectTime", vehicleRealData.getCollectTime());
                 for (Object[] objects : vehicleCommonDataFieldList) {
                     Field f1 = (Field) objects[0];
-                    Object o1 = f1.get(packet);
+                    Object o1 = f1.get(vehicleRealData.getVehicleCommonData());
                     Field[] f2_arr = (Field[]) objects[1];
                     for (Field f2 : f2_arr) {
                         Object o2 = f2.get(o1);
