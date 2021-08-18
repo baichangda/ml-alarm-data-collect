@@ -524,7 +524,11 @@ public class MlService {
                 final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
                 VehicleRealData vehicleRealData = (VehicleRealData) packet.getData();
                 Map<String, Object> curDataMap = new HashMap<>();
-                curDataMap.put("vin", packet.getVin());
+                //数据脱敏处理
+                String vin=vin_randomVin.computeIfAbsent(packet.getVin(), e -> {
+                    return "TEST" + Strings.padStart("" + vinNum.getAndIncrement(), 13, '0');
+                });
+                curDataMap.put("vin", vin);
                 curDataMap.put("collectTime", vehicleRealData.getCollectTime());
                 for (Object[] objects : vehicleCommonDataFieldList) {
                     Field f1 = (Field) objects[0];
@@ -535,10 +539,7 @@ public class MlService {
                         curDataMap.put(f1.getName() + "_" + f2.getName(), o2);
                     }
                 }
-                //数据脱敏处理
-                packet.setVin(vin_randomVin.computeIfAbsent(packet.getVin(), e -> {
-                    return "TEST" + Strings.padStart("" + vinNum.getAndIncrement(), 13, '0');
-                }));
+
                 tempList.add(JsonUtil.toJson(packet));
                 if (tempList.size() == 10000) {
                     mongoTemplate.insert(tempList, "signal_gb");
