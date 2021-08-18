@@ -540,7 +540,7 @@ public class MlService {
                     }
                 }
 
-                tempList.add(JsonUtil.toJson(packet));
+                tempList.add(JsonUtil.toJson(curDataMap));
                 if (tempList.size() == 10000) {
                     mongoTemplate.insert(tempList, "signal_gb");
                     tempList.clear();
