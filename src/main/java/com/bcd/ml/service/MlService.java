@@ -539,7 +539,7 @@ public class MlService {
 
         mongoTemplate.remove(new Query(), "signal_gb");
         Path path = Paths.get(gb_signalSourcePath);
-        List<String> tempList = new ArrayList<>();
+
         AtomicInteger vinNum = new AtomicInteger(1);
         Map<String, String> vin_randomVin = new HashMap<>();
 
@@ -553,6 +553,8 @@ public class MlService {
             }
             vehicleCommonDataFieldList.add(new Object[]{declaredField, innerDeclaredFields});
         }
+
+        List<Map<String,Object>> tempList = new ArrayList<>();
 
         try (BufferedReader br = Files.newBufferedReader(path)) {
             String line;
@@ -596,7 +598,7 @@ public class MlService {
                     }
                 }
 
-                tempList.add(JsonUtil.toJson(curDataMap));
+                tempList.add(curDataMap);
                 count.incrementAndGet();
                 monitorCount.incrementAndGet();
                 if (tempList.size() == 10000) {
