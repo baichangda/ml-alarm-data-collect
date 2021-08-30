@@ -60,9 +60,6 @@ public class MlService {
 
     ZoneOffset zoneOffset = ZoneOffset.of("+8");
 
-    @Value("${alarmStartTimeStr}")
-    String alarmStartTimeStr;
-
     @Value("${workPoolSize}")
     int workPoolSize;
 
@@ -177,7 +174,7 @@ public class MlService {
      * @param flag 是否转换
      * @return
      */
-    public int[] fetchAndSave(int flag) {
+    public int[] fetchAndSave(int flag,String alarmStartTimeStr) {
         List<Map<String, String>> alarmList = HBaseUtil.queryAlarms();
         int size1 = alarmList.size();
         logger.info("fetch alarm[{}]", size1);

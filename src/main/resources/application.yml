@@ -41,7 +41,6 @@ hbase:
     property:
       clientPort: 2181
 
-alarmStartTimeStr: 20200901
 workPoolSize: 100
 alarmTimeOffset: 60
 
