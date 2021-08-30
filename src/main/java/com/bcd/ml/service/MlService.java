@@ -30,6 +30,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -95,7 +96,7 @@ public class MlService {
     }
 
 
-    public int[] saveToMongo(int flag) {
+    public int[] saveToMongo(String alarmCollection,String signalCollection) {
         ScheduledExecutorService monitorPool = Executors.newScheduledThreadPool(1);
         ExecutorService alarmPool = Executors.newSingleThreadExecutor();
         AtomicInteger allAlarmCount = new AtomicInteger();
@@ -111,14 +112,14 @@ public class MlService {
 
         int batch = 1000;
         alarmPool.execute(() -> {
-            mongoTemplate.remove(new Query(), "alarm_all");
+            mongoTemplate.remove(new Query(), alarmCollection);
             try (BufferedReader br = Files.newBufferedReader(Paths.get(alarmSourcePath))) {
                 List<String> tempList = new ArrayList<>();
                 String line;
                 while ((line = br.readLine()) != null) {
                     tempList.add(line);
                     if (tempList.size() == batch) {
-                        mongoTemplate.insert(tempList, "alarm_all");
+                        mongoTemplate.insert(tempList, alarmCollection);
                         alarmCount.addAndGet(batch);
                         allAlarmCount.addAndGet(batch);
                         tempList.clear();
@@ -132,7 +133,7 @@ public class MlService {
             }
         });
 
-        if (flag == 1) {
+        if (signalCollection!=null) {
             mongoTemplate.remove(new Query(), "signal_all");
             try (BufferedReader br = Files.newBufferedReader(Paths.get(signalSourcePath))) {
                 List<String> tempList = new ArrayList<>();

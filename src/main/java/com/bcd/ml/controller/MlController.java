@@ -27,8 +27,8 @@ public class MlController {
     @RequestMapping(value = "/saveToMongo", method = RequestMethod.GET)
     @Operation(description = "解析数据文件保存到mongo")
     @ApiResponse(responseCode = "200", description = "解析数据文件保存到mongo")
-    public JsonMessage<int[]> saveToMongo(@RequestParam int flag){
-        return JsonMessage.success(mlService.saveToMongo(flag));
+    public JsonMessage<int[]> saveToMongo(@RequestParam String alarmCollection,@RequestParam(required = false) String signalCollection){
+        return JsonMessage.success(mlService.saveToMongo(alarmCollection,signalCollection));
     }
 
     @RequestMapping(value = "/fetchAndSave_gb", method = RequestMethod.GET)
