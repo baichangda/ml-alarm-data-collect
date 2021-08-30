@@ -199,7 +199,7 @@ public class HBaseUtil {
                             data.put(column,jsonString);
                         } catch (Exception e) {
                             e.printStackTrace();
-                            logger.error("数据转换异常:{0}", jsonString);
+                            logger.error("数据转换异常:{}", jsonString);
                         }
                     }
                 }
