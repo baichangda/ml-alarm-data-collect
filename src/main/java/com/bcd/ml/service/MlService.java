@@ -318,8 +318,6 @@ public class MlService {
                                     for (String[] arr : signals) {
                                         String signalTime = arr[0].substring(29, 43);
                                         String signalJson = arr[1];
-                                        JsonNode jsonNode = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(signalJson);
-                                        JsonNode json = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(jsonNode.get("json").asText());
                                         String key3 = vin + "-" + signalTime;
                                         if (!set3.contains(key3)) {
                                             synchronized (key3.intern()) {
@@ -330,6 +328,8 @@ public class MlService {
                                                 }
                                             }
                                             if (flag == 1) {
+                                                JsonNode jsonNode = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(signalJson);
+                                                JsonNode json = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(jsonNode.get("json").asText());
                                                 List<JsonNode> groupList = new ArrayList<>();
                                                 for (JsonNode group : json.get("channels")) {
                                                     groupList.add(group.get("data"));

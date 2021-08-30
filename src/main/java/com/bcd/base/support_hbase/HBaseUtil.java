@@ -71,6 +71,7 @@ public class HBaseUtil {
 
     public static List<Map<String,String>> queryAlarms() {
         Scan scan = new Scan();
+        scan.setCaching(3000);
         return queryDataMap(ALARM_TABLE, scan);
     }
 
