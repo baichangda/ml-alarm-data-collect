@@ -41,7 +41,7 @@ hbase:
     property:
       clientPort: 2181
 
-workPoolSize: 100
+workPoolSize: 10
 alarmTimeOffset: 60
 
 alarmSourcePath: alarm.txt
