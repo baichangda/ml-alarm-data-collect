@@ -28,6 +28,25 @@ spring:
     encoding: UTF-8
     cache-duration: -1
 
+  datasource:
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 15
+
+    #mysql
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://10.0.11.21:33067/RVM3_TEST?characterEncoding=utf8&useSSL=false&rewriteBatchedStatements=true&serverTimezone=GMT%2B8&generateSimpleParameterMetadata=true
+    username: root
+    password: root
+
+  #  jdbcTemplate配置
+  jdbc:
+    template:
+      fetch-size: -1
+      max-rows: -1
+      query-timeout:
+
+
 springdoc:
   packages-to-scan:
     - com.bcd

@@ -2,9 +2,7 @@ package com.bcd.ml.service;
 
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
-import com.alibaba.excel.event.AbstractIgnoreExceptionReadListener;
 import com.alibaba.excel.event.AnalysisEventListener;
-import com.alibaba.excel.event.SyncReadListener;
 import com.bcd.base.exception.BaseRuntimeException;
 import com.bcd.base.util.DateZoneUtil;
 import com.bcd.base.util.JsonUtil;
@@ -15,27 +13,23 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.base.Strings;
+import com.google.common.collect.Maps;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
-import org.apache.poi.poifs.filesystem.DocumentFactoryHelper;
-import org.apache.poi.poifs.filesystem.POIFSFileSystem;
-import org.apache.poi.xssf.streaming.SXSSFSheet;
-import org.apache.poi.xssf.streaming.SXSSFWorkbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.jdbc.core.ColumnMapRowMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStream;
+import javax.servlet.http.HttpServletResponse;
+import java.io.*;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -84,6 +78,10 @@ public class MlService {
     @Autowired
     MongoTemplate mongoTemplate;
 
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
+
     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
 
     Parser_gb32960 parser_gb32960 = new Parser_gb32960(false);
@@ -93,7 +91,7 @@ public class MlService {
     }
 
 
-    public int[] saveToMongo(String alarmCollection,String signalCollection) {
+    public int[] saveToMongo(String alarmCollection, String signalCollection) {
         ScheduledExecutorService monitorPool = Executors.newScheduledThreadPool(1);
         ExecutorService alarmPool = Executors.newSingleThreadExecutor();
         AtomicInteger allAlarmCount = new AtomicInteger();
@@ -130,7 +128,7 @@ public class MlService {
             }
         });
 
-        if (signalCollection!=null) {
+        if (signalCollection != null) {
             mongoTemplate.remove(new Query(), "signal_all");
             try (BufferedReader br = Files.newBufferedReader(Paths.get(signalSourcePath))) {
                 List<String> tempList = new ArrayList<>();
@@ -174,7 +172,7 @@ public class MlService {
      * @param flag 是否转换
      * @return
      */
-    public int[] fetchAndSave(int flag,String alarmStartTimeStr) {
+    public int[] fetchAndSave(int flag, String alarmStartTimeStr) {
         List<Map<String, String>> alarmList = HBaseUtil.queryAlarms();
         int size1 = alarmList.size();
         logger.info("fetch alarm[{}]", size1);
@@ -504,21 +502,22 @@ public class MlService {
         return count.get();
     }
 
-    public Map<String,String> initVinToVehicleType(){
-        Map<String,String> vinToVehicleType=new HashMap<>();
+    public Map<String, String> initVinToVehicleType() {
+        Map<String, String> vinToVehicleType = new HashMap<>();
         EasyExcel.read(vehicleInfoPath).password(vehicleInfoPwd)
                 .registerReadListener(new AnalysisEventListener() {
                     @Override
                     public void invoke(Object data, AnalysisContext context) {
                         final String vin = Optional.ofNullable(((LinkedHashMap<Integer, Object>) data).get(0)).map(Object::toString).orElse(null);
                         final String vehicleType = Optional.ofNullable(((LinkedHashMap<Integer, Object>) data).get(2)).map(Object::toString).orElse(null);
-                        if(vin!=null&&vehicleType!=null){
-                            vinToVehicleType.put(vin,vehicleType);
+                        if (vin != null && vehicleType != null) {
+                            vinToVehicleType.put(vin, vehicleType);
                         }
                     }
+
                     @Override
                     public void doAfterAllAnalysed(AnalysisContext context) {
-                        logger.info("finish read excel count[{}]",vinToVehicleType.size());
+                        logger.info("finish read excel count[{}]", vinToVehicleType.size());
                     }
                 }).doReadAll();
         return vinToVehicleType;
@@ -552,7 +551,7 @@ public class MlService {
             vehicleCommonDataFieldList.add(new Object[]{declaredField, innerDeclaredFields});
         }
 
-        List<Map<String,Object>> tempList = new ArrayList<>();
+        List<Map<String, Object>> tempList = new ArrayList<>();
 
         try (BufferedReader br = Files.newBufferedReader(path)) {
             String line;
@@ -562,32 +561,32 @@ public class MlService {
                 final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
                 Map<String, Object> curDataMap = new HashMap<>();
                 String vehicleType = vinToVehicleType.get(packet.getVin());
-                if(vehicleType==null){
-                    logger.info("vin[{}] no mapped vehicleType,discard data[{}]",packet.getVin(),line);
+                if (vehicleType == null) {
+                    logger.info("vin[{}] no mapped vehicleType,discard data[{}]", packet.getVin(), line);
                     continue;
                 }
                 //数据脱敏处理
-                String vin=vin_randomVin.computeIfAbsent(packet.getVin(), e -> {
+                String vin = vin_randomVin.computeIfAbsent(packet.getVin(), e -> {
                     return "TEST" + Strings.padStart("" + vinNum.getAndIncrement(), 13, '0');
                 });
                 curDataMap.put("vin", vin);
                 curDataMap.put("vehicleType", vehicleType);
                 PacketData packetData = packet.getData();
                 VehicleCommonData vehicleCommonData;
-                if(packetData instanceof VehicleRealData){
-                    vehicleCommonData=((VehicleRealData) packetData).getVehicleCommonData();
+                if (packetData instanceof VehicleRealData) {
+                    vehicleCommonData = ((VehicleRealData) packetData).getVehicleCommonData();
                     curDataMap.put("collectTime", ((VehicleRealData) packetData).getCollectTime());
-                }else if (packetData instanceof VehicleSupplementData){
-                    vehicleCommonData=((VehicleSupplementData) packetData).getVehicleCommonData();
+                } else if (packetData instanceof VehicleSupplementData) {
+                    vehicleCommonData = ((VehicleSupplementData) packetData).getVehicleCommonData();
                     curDataMap.put("collectTime", ((VehicleSupplementData) packetData).getCollectTime());
-                }else{
-                    logger.info("PacketData class is [{}],discard data[{}]",packetData.getClass().getName(),line);
+                } else {
+                    logger.info("PacketData class is [{}],discard data[{}]", packetData.getClass().getName(), line);
                     continue;
                 }
                 for (Object[] objects : vehicleCommonDataFieldList) {
                     Field f1 = (Field) objects[0];
                     Object o1 = f1.get(vehicleCommonData);
-                    if (o1!=null) {
+                    if (o1 != null) {
                         Field[] f2_arr = (Field[]) objects[1];
                         for (Field f2 : f2_arr) {
                             Object o2 = f2.get(o1);
@@ -620,5 +619,67 @@ public class MlService {
             }
         }
         return count.get();
+    }
+
+    public void parseAlarmTxt(MultipartFile alarmTxtFile, HttpServletResponse response) {
+        try {
+            String[] header = new String[]{"key", "vin", "work_model", "vehicle_type", "alarm_level",
+                    "alarm_name", "alarm_type", "begin_time", "end_time", "mileage", "platform_code",
+                    "platform_name", "salestatus", "issue", "handleruser", "handlertime", "handlerstatus", "is_alarm"};
+            final BufferedReader br = new BufferedReader(new InputStreamReader(alarmTxtFile.getInputStream()));
+            List<List> lineList = new ArrayList<>();
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] arr = line.split("\t");
+                lineList.add(new ArrayList<>(Arrays.asList(arr)));
+            }
+            for (int i = 0; i < lineList.size(); i++) {
+                List list = lineList.get(i);
+                String issue = Optional.ofNullable(list.get(13)).map(Object::toString).orElse(null);
+                String handlerstatus = Optional.ofNullable(list.get(16)).map(Object::toString).orElse(null);
+                final JsonNode issueJsonNode = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(issue);
+                if (issueJsonNode == null) {
+                    lineList.remove(i);
+                    i--;
+                    continue;
+                }
+                final JsonNode handlerstatusJsonNode = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(handlerstatus);
+                String lastIssue = issueJsonNode.get(issueJsonNode.size() - 1).asText();
+                String lastHandlerstatusJsonNode = handlerstatusJsonNode.get(handlerstatusJsonNode.size() - 1).asText();
+                if (!"4".equals(lastHandlerstatusJsonNode)) {
+                    //只处理已经给出终极意见的
+                    lineList.remove(i);
+                    i--;
+                    continue;
+                }
+                int isAlarm = -1;
+                if (lastIssue.contains("真报警") ||
+                        lastIssue.contains("真实报警") ||
+                        lastIssue.contains("真实故障")) {
+                    isAlarm = 1;
+                } else if (lastIssue.contains("误报警")) {
+                    isAlarm = 0;
+                } else {
+                    logger.info(lastIssue);
+                }
+                list.add(isAlarm);
+            }
+            lineList.add(0, Arrays.asList(header));
+            EasyExcel.write(response.getOutputStream()).sheet(0).doWrite(lineList);
+
+        } catch (IOException ex) {
+            throw BaseRuntimeException.getException(ex);
+        }
+
+    }
+
+    public int updateVehicleToIncarQa() {
+        final Map<String, String> incarVinToVehicleType = jdbcTemplate.query("select vin,vehicle_type from t_vehicle where vin is not null and vehicle_type is not null", new ColumnMapRowMapper())
+                .stream().collect(Collectors.toMap(e -> e.get("vin").toString(), e -> e.get("vehicle_type").toString()));
+        final Map<String, String> rvmVinToVehicleType = initVinToVehicleType();
+
+        final Map<String, String> onlyOnRight = Maps.difference(incarVinToVehicleType, rvmVinToVehicleType).entriesOnlyOnRight();
+
+        return onlyOnRight.size();
     }
 }
