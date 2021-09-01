@@ -163,10 +163,11 @@ public class MlService {
     }
 
     /**
-     * @param flag 是否转换
+     * @param alarmStartTimeStr
+     * @param alarmEndTimeStr
      * @return
      */
-    public int[] fetchAndSave(int flag, String alarmStartTimeStr, String alarmEndTimeStr) {
+    public int[] fetchAndSave(String alarmStartTimeStr, String alarmEndTimeStr) {
         long alarmStartTime = DateZoneUtil.stringToDate_day(alarmStartTimeStr).getTime();
         long alarmEndTime = DateZoneUtil.stringToDate_day(alarmEndTimeStr).getTime();
         List<Map<String, String>> alarmList = HBaseUtil.queryAlarms(e -> {
@@ -185,11 +186,6 @@ public class MlService {
             return new int[]{0, 0};
         }
 
-
-        AtomicInteger allProcessedCount = new AtomicInteger();
-        AtomicInteger allProcessedAlarmCount = new AtomicInteger();
-        AtomicInteger allProcessedSignalCount = new AtomicInteger();
-        AtomicInteger processedCount = new AtomicInteger();
         AtomicInteger processedAlarmCount = new AtomicInteger();
         AtomicInteger processedSignalCount = new AtomicInteger();
         AtomicInteger saveAlarmCount = new AtomicInteger();
@@ -197,16 +193,8 @@ public class MlService {
         ScheduledExecutorService monitorPool = Executors.newScheduledThreadPool(1);
         int period = 5;
         monitorPool.scheduleWithFixedDelay(() -> {
-            int allProcessed = allProcessedCount.get();
-            int allProcessedAlarm = allProcessedAlarmCount.get();
-            int allProcessedSignal = allProcessedSignalCount.get();
-            int processed = processedCount.getAndSet(0);
-            int processedAlarm = processedAlarmCount.getAndSet(0);
-            int processedSignal = processedSignalCount.getAndSet(0);
-            int saveAlarm = saveAlarmCount.getAndSet(0);
-            int saveSignal = saveSignalCount.getAndSet(0);
-            logger.info("processed[{}/{},({},{})] processSpeed[{},({},{})]  saveSpeed[({},{})]"
-                    , allProcessed, size, allProcessedAlarm, allProcessedSignal, processed / period, processedAlarm / period, processedSignal / period, saveAlarm / period, saveSignal / period);
+            logger.info("allAlarm[{}] processedAlarm[{}] processedSignal[{}] saveAlarm[{}] saveSignal[{}]"
+                    , size,processedAlarmCount.get(),processedSignalCount.get(),saveAlarmCount.get(),saveSignalCount.get());
         }, period, period, TimeUnit.SECONDS);
 
 
@@ -256,7 +244,7 @@ public class MlService {
                         bw.write(signalJsonStr);
                         bw.newLine();
                         bw.flush();
-                        saveSignalCount.incrementAndGet();
+                        saveSignalCount.addAndGet(30);
                     }
                 }
 
@@ -298,7 +286,6 @@ public class MlService {
                             if (old == null) {
                                 if (signalSize > 0) {
                                     processedAlarmCount.incrementAndGet();
-                                    allProcessedAlarmCount.incrementAndGet();
                                     alarmQueue.put(alarm);
                                     for (String[] arr : signals) {
                                         String signalTime = arr[0].substring(29, 43);
@@ -312,47 +299,8 @@ public class MlService {
                                                     set3.add(key3);
                                                 }
                                             }
-                                            if (flag == 1) {
-                                                JsonNode jsonNode = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(signalJson);
-                                                JsonNode json = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(jsonNode.get("json").asText());
-                                                List<JsonNode> groupList = new ArrayList<>();
-                                                for (JsonNode group : json.get("channels")) {
-                                                    groupList.add(group.get("data"));
-                                                }
-                                                int dataSize = groupList.get(0).size();
-                                                List<Map<String, JsonNode>> dataList = new ArrayList<>();
-                                                for (int j = 0; j < dataSize; j++) {
-                                                    Map<String, JsonNode> data = new HashMap<>();
-                                                    for (JsonNode group : groupList) {
-                                                        JsonNode cur = group.get(j);
-                                                        cur.fields().forEachRemaining(stringJsonNodeEntry -> {
-                                                            String key = stringJsonNodeEntry.getKey();
-                                                            JsonNode value = stringJsonNodeEntry.getValue();
-                                                            if (value.isArray()) {
-                                                                int index = 0;
-                                                                for (JsonNode node : value) {
-                                                                    data.put(key + "_" + index++, node);
-                                                                }
-                                                            } else {
-                                                                data.put(key, value);
-                                                            }
-                                                        });
-                                                    }
-                                                    data.put("collectDate", LongNode.valueOf(Instant.from(formatter.parse(signalTime)).getEpochSecond() + j));
-                                                    data.put("vin", TextNode.valueOf(vin));
-                                                    data.put("vehicleType", TextNode.valueOf(alarm.get("vehicleType")));
-                                                    dataList.add(data);
-                                                }
-                                                processedSignalCount.addAndGet(dataSize);
-                                                allProcessedSignalCount.addAndGet(dataSize);
-                                                for (Map<String, JsonNode> data : dataList) {
-                                                    signalQueue.put(JsonUtil.toJson(data));
-                                                }
-                                            } else {
-                                                processedSignalCount.incrementAndGet();
-                                                allProcessedSignalCount.incrementAndGet();
-                                                signalQueue.put(signalJson);
-                                            }
+                                            processedSignalCount.addAndGet(30);
+                                            signalQueue.put(signalJson);
                                         }
                                     }
                                 } else {
@@ -361,7 +309,6 @@ public class MlService {
                             } else {
                                 if (old > 0) {
                                     processedAlarmCount.incrementAndGet();
-                                    allProcessedAlarmCount.incrementAndGet();
                                     alarmQueue.put(alarm);
                                 } else {
                                     logger.info("no signal alarm[{}] in map2", key1);
@@ -369,7 +316,7 @@ public class MlService {
                             }
                         }
                     }
-                } catch (IOException | InterruptedException e) {
+                } catch (InterruptedException e) {
                     throw BaseRuntimeException.getException(e);
                 }
             });
@@ -379,8 +326,6 @@ public class MlService {
         //split alarm
         Iterator<Map<String, String>> it = alarmList.iterator();
         while (it.hasNext()) {
-            processedCount.incrementAndGet();
-            allProcessedCount.incrementAndGet();
             try {
                 Map<String, String> alarm = it.next();
                 String vin = alarm.get("vin");
@@ -397,7 +342,6 @@ public class MlService {
                     } else {
                         if (val2 > 0) {
                             processedAlarmCount.incrementAndGet();
-                            allProcessedAlarmCount.incrementAndGet();
                             alarmQueue.put(alarm);
                         } else {
                             logger.info("no signal alarm[{}] in map2", key1);
@@ -448,9 +392,9 @@ public class MlService {
             throw BaseRuntimeException.getException(e);
         }
 
-        logger.info("finish alarm[{}] signal[{}]", allProcessedAlarmCount.get(), allProcessedSignalCount.get());
+        logger.info("finish alarm[{}] signal[{}]", saveAlarmCount.get(), saveSignalCount.get());
 
-        return new int[]{allProcessedAlarmCount.get(), allProcessedSignalCount.get()};
+        return new int[]{saveAlarmCount.get(), saveSignalCount.get()};
     }
 
     public int fetchAndSave_gb(int num) {

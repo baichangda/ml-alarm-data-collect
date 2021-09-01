@@ -29,8 +29,8 @@ public class MlController extends BaseController {
     @RequestMapping(value = "/fetchAndSave", method = RequestMethod.GET)
     @Operation(description = "获取报警数据和信号数据并保存文件")
     @ApiResponse(responseCode = "200", description = "获取报警数据和信号数据并保存文件")
-    public JsonMessage<int[]> fetchAndSave(@RequestParam int flag,@RequestParam String alarmStartTimeStr,@RequestParam String alarmEndTimeStr){
-        return JsonMessage.success(mlService.fetchAndSave(flag,alarmStartTimeStr,alarmEndTimeStr));
+    public JsonMessage<int[]> fetchAndSave(@RequestParam String alarmStartTimeStr,@RequestParam String alarmEndTimeStr){
+        return JsonMessage.success(mlService.fetchAndSave(alarmStartTimeStr,alarmEndTimeStr));
     }
 
     @RequestMapping(value = "/saveToMongo", method = RequestMethod.GET)
