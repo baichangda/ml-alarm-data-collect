@@ -77,9 +77,6 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-aop")
     //springboot web支持
     implementation("org.springframework.boot:spring-boot-starter-web")
-    //springboot jdbc支持
-    implementation("org.springframework.boot:spring-boot-starter-jdbc")
-    implementation("com.github.jsqlparser:jsqlparser:${jsqlparserVersion}")
 
     //springboot log4j2支持
     implementation('org.springframework.boot:spring-boot-starter-log4j2')
@@ -109,10 +106,6 @@ dependencies {
 
     // https://mvnrepository.com/artifact/com.alibaba/easyexcel
     implementation group: 'com.alibaba', name: 'easyexcel', version: "${easyexcelVersion}"
-
-    //mysql驱动包
-    runtimeOnly "mysql:mysql-connector-java:${mysqlVersion}"
-
 
 }
 

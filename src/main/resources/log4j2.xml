@@ -37,12 +37,12 @@
     <loggers>
         <!-- show parameters for jdbcTemplate sql 专为 jdbcTemplate 定制 -->
         <!-- spring jdbc参数绑定日志 -->
-        <logger name="org.springframework.jdbc.core.StatementCreatorUtils" additivity="true" level="TRACE" />
+<!--        <logger name="org.springframework.jdbc.core.StatementCreatorUtils" additivity="true" level="TRACE" />-->
         <!-- spring jdbc sql -->
         <logger namse="org.springframework.jdbc.core" additivity="true" level="DEBUG"/>
 
         <!-- mongodb日志开启 -->
-        <logger name="org.springframework.data.mongodb.core" level="DEBUG"/>
+<!--        <logger name="org.springframework.data.mongodb.core" level="DEBUG"/>-->
 
         <!-- 日志输出级别 -->
         <root level="INFO">

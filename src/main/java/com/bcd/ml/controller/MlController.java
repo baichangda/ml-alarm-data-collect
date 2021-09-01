@@ -29,8 +29,8 @@ public class MlController extends BaseController {
     @RequestMapping(value = "/fetchAndSave", method = RequestMethod.GET)
     @Operation(description = "获取报警数据和信号数据并保存文件")
     @ApiResponse(responseCode = "200", description = "获取报警数据和信号数据并保存文件")
-    public JsonMessage<int[]> fetchAndSave(@RequestParam int flag,@RequestParam String alarmStartTimeStr){
-        return JsonMessage.success(mlService.fetchAndSave(flag,alarmStartTimeStr));
+    public JsonMessage<int[]> fetchAndSave(@RequestParam int flag,@RequestParam String alarmStartTimeStr,@RequestParam String alarmEndTimeStr){
+        return JsonMessage.success(mlService.fetchAndSave(flag,alarmStartTimeStr,alarmEndTimeStr));
     }
 
     @RequestMapping(value = "/saveToMongo", method = RequestMethod.GET)
@@ -65,11 +65,4 @@ public class MlController extends BaseController {
         mlService.parseAlarmTxt(alarmTxtFile,response);
     }
 
-
-    @RequestMapping(value = "/updateVehicleToIncarQa", method = RequestMethod.POST)
-    @Operation(description = "将正式环境的车辆档案数据更新到incar qa环境中")
-    @ApiResponse(responseCode = "200", description = "更新结果")
-    public JsonMessage<Integer> updateVehicleToIncarQa(){
-        return JsonMessage.success(mlService.updateVehicleToIncarQa());
-    }
 }

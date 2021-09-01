@@ -73,7 +73,7 @@ public class HBaseUtil {
     public static List<Map<String,String>> queryAlarms(Predicate<Map<String,String>> predicate) {
         Scan scan = new Scan();
         scan.setCaching(3000);
-        return queryDataMap(ALARM_TABLE, scan);
+        return queryDataMap(ALARM_TABLE, scan,predicate);
     }
 
     public static List<String[]> querySignals(String vin, Date startTime, Date endTime) {
@@ -180,7 +180,7 @@ public class HBaseUtil {
      * @date 2018/10/23 10:13
      * @since 1.0.0
      */
-    private static List<Map<String,String>> queryDataMap(String tableName, Scan scan) {
+    private static List<Map<String,String>> queryDataMap(String tableName, Scan scan,Predicate<Map<String,String>> predicate) {
         ResultScanner rs = null;
         // 获取表
         Table table = null;
@@ -204,7 +204,9 @@ public class HBaseUtil {
                         }
                     }
                 }
-                dataList.add(data);
+                if(predicate.test(data)){
+                    dataList.add(data);
+                }
             }
         } catch (IOException e) {
             logger.error(MessageFormat.format("遍历查询指定表中的所有数据失败,tableName:{0}"
@@ -466,5 +468,7 @@ public class HBaseUtil {
         }
 
     }
+
+
 
 }

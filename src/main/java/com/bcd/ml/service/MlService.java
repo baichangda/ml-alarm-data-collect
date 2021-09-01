@@ -78,10 +78,6 @@ public class MlService {
     @Autowired
     MongoTemplate mongoTemplate;
 
-    @Autowired
-    JdbcTemplate jdbcTemplate;
-
-
     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
 
     Parser_gb32960 parser_gb32960 = new Parser_gb32960(false);
@@ -172,14 +168,15 @@ public class MlService {
      * @param flag 是否转换
      * @return
      */
-    public int[] fetchAndSave(int flag, String alarmStartTimeStr) {
+    public int[] fetchAndSave(int flag, String alarmStartTimeStr, String alarmEndTimeStr) {
         long alarmStartTime = DateZoneUtil.stringToDate_day(alarmStartTimeStr).getTime();
-        List<Map<String, String>> alarmList = HBaseUtil.queryAlarms(e->{
+        long alarmEndTime = DateZoneUtil.stringToDate_day(alarmEndTimeStr).getTime();
+        List<Map<String, String>> alarmList = HBaseUtil.queryAlarms(e -> {
             String alarmLevel = e.get("alarmLevel");
             String platformCode = e.get("platformCode");
             if ("3".equals(alarmLevel) && ("gb".equals(platformCode) || "gb-private".equals(platformCode))) {
                 long cur = DateZoneUtil.stringToDate_second(e.get("beginTime")).getTime();
-                return cur >= alarmStartTime;
+                return cur >= alarmStartTime && cur <= alarmEndTime;
             } else {
                 return false;
             }
@@ -665,15 +662,5 @@ public class MlService {
             throw BaseRuntimeException.getException(ex);
         }
 
-    }
-
-    public int updateVehicleToIncarQa() {
-        final Map<String, String> incarVinToVehicleType = jdbcTemplate.query("select vin,vehicle_type from t_vehicle where vin is not null and vehicle_type is not null", new ColumnMapRowMapper())
-                .stream().collect(Collectors.toMap(e -> e.get("vin").toString(), e -> e.get("vehicle_type").toString()));
-        final Map<String, String> rvmVinToVehicleType = initVinToVehicleType();
-
-        final Map<String, String> onlyOnRight = Maps.difference(incarVinToVehicleType, rvmVinToVehicleType).entriesOnlyOnRight();
-
-        return onlyOnRight.size();
     }
 }
