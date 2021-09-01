@@ -24,6 +24,7 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 
 @Configuration
@@ -69,7 +70,7 @@ public class HBaseUtil {
         return connection.getTable(TableName.valueOf(tableName), hbasePool);
     }
 
-    public static List<Map<String,String>> queryAlarms() {
+    public static List<Map<String,String>> queryAlarms(Predicate<Map<String,String>> predicate) {
         Scan scan = new Scan();
         scan.setCaching(3000);
         return queryDataMap(ALARM_TABLE, scan);

@@ -173,26 +173,20 @@ public class MlService {
      * @return
      */
     public int[] fetchAndSave(int flag, String alarmStartTimeStr) {
-        List<Map<String, String>> alarmList = HBaseUtil.queryAlarms();
-        int size1 = alarmList.size();
-        logger.info("fetch alarm[{}]", size1);
-        if (size1 == 0) {
-            return new int[]{0, 0};
-        }
         long alarmStartTime = DateZoneUtil.stringToDate_day(alarmStartTimeStr).getTime();
-        alarmList.removeIf(e -> {
+        List<Map<String, String>> alarmList = HBaseUtil.queryAlarms(e->{
             String alarmLevel = e.get("alarmLevel");
             String platformCode = e.get("platformCode");
             if ("3".equals(alarmLevel) && ("gb".equals(platformCode) || "gb-private".equals(platformCode))) {
                 long cur = DateZoneUtil.stringToDate_second(e.get("beginTime")).getTime();
-                return cur < alarmStartTime;
+                return cur >= alarmStartTime;
             } else {
-                return true;
+                return false;
             }
         });
-        int size2 = alarmList.size();
-        logger.info("fetch filter alarm[{}]", size2);
-        if (size2 == 0) {
+        int size = alarmList.size();
+        logger.info("fetch filter alarm[{}]", size);
+        if (size == 0) {
             return new int[]{0, 0};
         }
 
@@ -217,7 +211,7 @@ public class MlService {
             int saveAlarm = saveAlarmCount.getAndSet(0);
             int saveSignal = saveSignalCount.getAndSet(0);
             logger.info("processed[{}/{},({},{})] processSpeed[{},({},{})]  saveSpeed[({},{})]"
-                    , allProcessed, size2, allProcessedAlarm, allProcessedSignal, processed / period, processedAlarm / period, processedSignal / period, saveAlarm / period, saveSignal / period);
+                    , allProcessed, size, allProcessedAlarm, allProcessedSignal, processed / period, processedAlarm / period, processedSignal / period, saveAlarm / period, saveSignal / period);
         }, period, period, TimeUnit.SECONDS);
 
 
@@ -623,9 +617,9 @@ public class MlService {
 
     public void parseAlarmTxt(MultipartFile alarmTxtFile, HttpServletResponse response) {
         try {
-            String[] header = new String[]{"key", "vin", "work_model", "vehicle_type", "alarm_level",
-                    "alarm_name", "alarm_type", "begin_time", "end_time", "mileage", "platform_code",
-                    "platform_name", "salestatus", "issue", "handleruser", "handlertime", "handlerstatus", "is_alarm"};
+            String[] header = new String[]{"key", "vin", "workModel", "vehicleType", "alarm_level",
+                    "alarm_name", "alarmType", "beginTime", "end_time", "mileage", "platform_code",
+                    "platform_name", "saleStatus", "issue", "handleruser", "handlertime", "handlerstatus", "is_alarm"};
             final BufferedReader br = new BufferedReader(new InputStreamReader(alarmTxtFile.getInputStream()));
             List<List> lineList = new ArrayList<>();
             String line;
