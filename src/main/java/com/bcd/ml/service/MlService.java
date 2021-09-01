@@ -225,7 +225,7 @@ public class MlService {
             } catch (IOException e) {
                 throw BaseRuntimeException.getException(e);
             }
-            try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(alarmFilePath), StandardOpenOption.APPEND)) {
+            try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(alarmFilePath))) {
                 while (!stop.get()) {
                     Map<String, String> data = alarmQueue.poll(3, TimeUnit.SECONDS);
                     if (data != null) {
@@ -249,7 +249,7 @@ public class MlService {
             } catch (IOException e) {
                 throw BaseRuntimeException.getException(e);
             }
-            try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(signalsFilePath), StandardOpenOption.APPEND)) {
+            try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(signalsFilePath))) {
                 while (!stop.get()) {
                     String signalJsonStr = signalQueue.poll(3, TimeUnit.SECONDS);
                     if (signalJsonStr != null) {
