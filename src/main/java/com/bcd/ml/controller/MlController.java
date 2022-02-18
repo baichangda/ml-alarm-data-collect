@@ -56,8 +56,8 @@ public class MlController extends BaseController {
 
 
     @RequestMapping(value = "/parseAlarmTxt", method = RequestMethod.POST,consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(description = "解析数据文件保存到mongo")
-    @ApiResponse(responseCode = "200", description = "解析数据文件保存到mongo",
+    @Operation(description = "解析报警文本")
+    @ApiResponse(responseCode = "200", description = "解析报警文本",
             content =@Content(mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE),
             headers = {@Header(name = HttpHeaders.CONTENT_DISPOSITION,description = "attachment;filename=parseAlarmTxt.xlsx")})
     public void parseAlarmTxt(@RequestParam MultipartFile alarmTxtFile, HttpServletResponse response){

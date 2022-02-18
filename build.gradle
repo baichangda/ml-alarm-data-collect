@@ -3,7 +3,7 @@ buildscript {
         guavaVersion = '+'
         freemarkerVersion = '+'
         commonsPool2 = '+'
-        disruptorVersion = '+'
+        disruptorVersion = '3.+'
         springdocVersion = '+'
         caffeineVersion = '2.+'
         easyexcelVersion='+'

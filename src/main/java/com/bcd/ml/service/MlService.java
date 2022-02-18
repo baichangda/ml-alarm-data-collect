@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -194,7 +195,7 @@ public class MlService {
         int period = 5;
         monitorPool.scheduleWithFixedDelay(() -> {
             logger.info("allAlarm[{}] processedAlarm[{}] processedSignal[{}] saveAlarm[{}] saveSignal[{}]"
-                    , size,processedAlarmCount.get(),processedSignalCount.get(),saveAlarmCount.get(),saveSignalCount.get());
+                    , size, processedAlarmCount.get(), processedSignalCount.get(), saveAlarmCount.get(), saveSignalCount.get());
         }, period, period, TimeUnit.SECONDS);
 
 
@@ -554,18 +555,50 @@ public class MlService {
         return count.get();
     }
 
+    enum Match{
+        equals,
+        contains
+    }
+
+    public static class CheckRes {
+        public String[] content;
+        public Match match;
+        /**
+         * 0、1
+         */
+        public int res;
+
+        public CheckRes(Match match, int res, String... content) {
+            this.match = match;
+            this.res = res;
+            this.content = content;
+        }
+    }
+
     public void parseAlarmTxt(MultipartFile alarmTxtFile, HttpServletResponse response) {
         try {
             String[] header = new String[]{"key", "vin", "workModel", "vehicleType", "alarm_level",
                     "alarm_name", "alarmType", "beginTime", "end_time", "mileage", "platform_code",
                     "platform_name", "saleStatus", "issue", "handleruser", "handlertime", "handlerstatus", "is_alarm"};
+
+            List<CheckRes> checkResList = new ArrayList<>();
+            checkResList.add(new CheckRes(Match.contains, 1, "真报警", "真实报警", "真实故障", "真是报警"));
+            checkResList.add(new CheckRes(Match.contains, 0, "误报警"));
+            checkResList.add(new CheckRes(Match.equals, 0, "正常使用中","正常行驶中"));
+            checkResList.add(new CheckRes(Match.contains, 1, "已开救援工单","已被救援","救援跟进","开具救援","维修中报警","实施救援","上报维修案例","上报案例维修","协调车辆进站","更换模组","维修绝缘问题","开展维修","车辆已报废","确认故障","已经往修理厂拖了","拖去维修厂","上门拖车","已报修","已拖车","拖车进站处理","维修中误触发","正在维修","拖车进站","站内维修","检测维修","进行维修","进行修理","在外维修","外面修理站维修","非授权店维修","外面修理厂维修","模拟触发报警演练","安全风险解除","维修时误触发"));
+            checkResList.add(new CheckRes(Match.contains, 0, "误触发","慢充桩绝缘问题","车辆快充时触发","快充桩绝缘引发","慢充桩导致","快充引发绝缘","充电桩引发","快充桩引发","慢充桩引发","信号跳变","信号间歇性跳变","数据跳变","误操作","无安全风险","客户表示车辆正常"));
+
+//            checkResList.add(new CheckRes(Match.contains, 0, "无安全风险"));
+
+
             final BufferedReader br = new BufferedReader(new InputStreamReader(alarmTxtFile.getInputStream()));
             List<List> lineList = new ArrayList<>();
             String line;
             while ((line = br.readLine()) != null) {
-                String[] arr = line.split("\t");
+                String[] arr = line.split(",");
                 lineList.add(new ArrayList<>(Arrays.asList(arr)));
             }
+            lineList.remove(0);
             for (int i = 0; i < lineList.size(); i++) {
                 List list = lineList.get(i);
                 String issue = Optional.ofNullable(list.get(13)).map(Object::toString).orElse(null);
@@ -577,7 +610,13 @@ public class MlService {
                     continue;
                 }
                 final JsonNode handlerstatusJsonNode = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(handlerstatus);
-                String lastIssue = issueJsonNode.get(issueJsonNode.size() - 1).asText();
+                final JsonNode lastIssueJsonNode = issueJsonNode.get(issueJsonNode.size() - 1);
+                if(lastIssueJsonNode==null){
+                    lineList.remove(i);
+                    i--;
+                    continue;
+                }
+                String lastIssue = lastIssueJsonNode.asText();
                 String lastHandlerstatusJsonNode = handlerstatusJsonNode.get(handlerstatusJsonNode.size() - 1).asText();
                 if (!"4".equals(lastHandlerstatusJsonNode)) {
                     //只处理已经给出终极意见的
@@ -586,16 +625,35 @@ public class MlService {
                     continue;
                 }
                 int isAlarm = -1;
-                if (lastIssue.contains("真报警") ||
-                        lastIssue.contains("真实报警") ||
-                        lastIssue.contains("真实故障")) {
-                    isAlarm = 1;
-                } else if (lastIssue.contains("误报警")) {
-                    isAlarm = 0;
-                } else {
+
+
+                for (CheckRes checkRes : checkResList) {
+                    switch (checkRes.match) {
+                        case equals: {
+                            for (String s : checkRes.content) {
+                                if (lastIssue.equals(s)) {
+                                    isAlarm = checkRes.res;
+                                    break;
+                                }
+                            }
+                        }
+                        case contains: {
+                            for (String s : checkRes.content) {
+                                if (lastIssue.contains(s)) {
+                                    isAlarm = checkRes.res;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (isAlarm == -1) {
                     logger.info(lastIssue);
                 }
+
                 list.add(isAlarm);
+
             }
             lineList.add(0, Arrays.asList(header));
             EasyExcel.write(response.getOutputStream()).sheet(0).doWrite(lineList);
