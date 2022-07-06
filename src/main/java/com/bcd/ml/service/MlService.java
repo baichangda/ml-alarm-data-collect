@@ -169,6 +169,7 @@ public class MlService {
      * @return
      */
     public int[] fetchAndSave(String alarmStartTimeStr, String alarmEndTimeStr) {
+        logger.info("start fetchAndSave[{}-{}]",alarmStartTimeStr,alarmEndTimeStr);
         long alarmStartTime = DateZoneUtil.stringToDate_day(alarmStartTimeStr).getTime();
         long alarmEndTime = DateZoneUtil.stringToDate_day(alarmEndTimeStr).getTime();
         List<Map<String, String>> alarmList = HBaseUtil.queryAlarms(e -> {
@@ -541,11 +542,11 @@ public class MlService {
                     "platform_name", "saleStatus", "issue", "handleruser", "handlertime", "handlerstatus", "is_alarm"};
 
             List<CheckRes> checkResList = new ArrayList<>();
-            checkResList.add(new CheckRes(Match.contains, 1, "真报警", "真实报警", "真实故障", "真是报警"));
-            checkResList.add(new CheckRes(Match.contains, 0, "误报警"));
+            checkResList.add(new CheckRes(Match.contains, 1, "真报警", "真实报警", "真实故障", "真是报警","实报警","真实报价"));
+            checkResList.add(new CheckRes(Match.contains, 0, "误报警","加报警"));
             checkResList.add(new CheckRes(Match.equals, 0, "正常使用中", "正常行驶中"));
-            checkResList.add(new CheckRes(Match.contains, 1, "已开救援工单", "已被救援", "救援跟进", "开具救援", "维修中报警", "实施救援", "上报维修案例", "上报案例维修", "协调车辆进站", "更换模组", "维修绝缘问题", "开展维修", "车辆已报废", "确认故障", "已经往修理厂拖了", "拖去维修厂", "上门拖车", "已报修", "已拖车", "拖车进站处理", "维修中误触发", "正在维修", "拖车进站", "站内维修", "检测维修", "进行维修", "进行修理", "在外维修", "外面修理站维修", "非授权店维修", "外面修理厂维修", "模拟触发报警演练", "安全风险解除", "维修时误触发"));
-            checkResList.add(new CheckRes(Match.contains, 0, "误触发", "慢充桩绝缘问题", "车辆快充时触发", "快充桩绝缘引发", "慢充桩导致", "快充引发绝缘", "充电桩引发", "快充桩引发", "慢充桩引发", "信号跳变", "信号间歇性跳变", "数据跳变", "误操作", "无安全风险", "客户表示车辆正常"));
+            checkResList.add(new CheckRes(Match.contains, 1, "已开救援工单", "已被救援", "救援跟进", "开具救援", "维修中报警", "实施救援", "上报维修案例", "上报案例维修", "协调车辆进站", "更换模组", "维修绝缘问题", "开展维修", "车辆已报废", "确认故障", "已经往修理厂拖了", "拖去维修厂", "上门拖车", "已报修", "已拖车", "拖车进站处理", "维修中误触发", "正在维修", "拖车进站", "站内维修", "检测维修", "进行维修", "进行修理", "在外维修", "外面修理站维修", "非授权店维修", "外面修理厂维修", "模拟触发报警演练", "安全风险解除", "维修时误触发","维修中","在非指定维修站维修","抢修工单处理","客户表示车辆故障","联系客户抢修处理","自己已安排了救援"));
+            checkResList.add(new CheckRes(Match.contains, 0, "误触发", "慢充桩绝缘问题", "车辆快充时触发", "快充桩绝缘引发", "慢充桩导致", "快充引发绝缘", "充电桩引发", "快充桩引发", "慢充桩引发", "信号跳变", "信号间歇性跳变", "数据跳变", "误操作", "无安全风险", "客户表示车辆正常","慢充操作导致"));
 
 //            checkResList.add(new CheckRes(Match.contains, 0, "无安全风险"));
 

@@ -44,11 +44,8 @@ spring:
       max-rows: -1
       query-timeout:
   servlet:
-multipart:
-      max-file-size: 10MB
-
-
-
+    multipart:
+      max-file-size: 100MB
 springdoc:
   packages-to-scan:
     - com.bcd
