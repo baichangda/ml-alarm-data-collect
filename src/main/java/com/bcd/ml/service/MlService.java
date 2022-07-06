@@ -181,42 +181,65 @@ public class MlService {
                 return false;
             }
         });
-        int size = alarmList.size();
-        logger.info("fetch filter alarm[{}]", size);
+        final int size = alarmList.size();
         if (size == 0) {
             return new int[]{0, 0};
         }
+        //vin、时间、报警类型、平台code重复的报警
+        Set<String> set1 = new HashSet<>();
+        List<Map<String, String>> alarmList1 = new ArrayList<>();
+        //vin、时间重复的报警
+        Set<String> set2 = new HashSet<>();
+        List<Map<String, String>> alarmList2 = new ArrayList<>();
+        for (Map<String, String> alarm : alarmList) {
+            String vin = alarm.get("vin");
+            String beginTime = alarm.get("beginTime");
+            String alarmType = alarm.get("alarmType");
+            String platformCode = alarm.get("platformCode");
+            String key1 = vin + "-" + beginTime + "-" + alarmType + "-" + platformCode;
+            String key2 = vin + "-" + beginTime;
+            if (!set1.contains(key1)) {
+                alarmList1.add(alarm);
+                set1.add(key1);
+            }
+            if (!set2.contains(key2)) {
+                alarmList2.add(alarm);
+                set2.add(key2);
+            }
+        }
 
-        AtomicInteger processedAlarmCount = new AtomicInteger();
+        final int size1 = alarmList1.size();
+        final int size2 = alarmList2.size();
+
+        logger.info("fetch filter alarm[{}] alarm1[{}] alarm2[{}]", size, size1, size2);
+
         AtomicInteger processedSignalCount = new AtomicInteger();
         AtomicInteger saveAlarmCount = new AtomicInteger();
         AtomicInteger saveSignalCount = new AtomicInteger();
         ScheduledExecutorService monitorPool = Executors.newScheduledThreadPool(1);
         int period = 5;
         monitorPool.scheduleWithFixedDelay(() -> {
-            logger.info("allAlarm[{}] processedAlarm[{}] processedSignal[{}] saveAlarm[{}] saveSignal[{}]"
-                    , size, processedAlarmCount.get(), processedSignalCount.get(), saveAlarmCount.get(), saveSignalCount.get());
+            logger.info("alarm[{}] alarm1[{}] alarm2[{}] saveAlarm[{}] processedSignal[{}] saveSignal[{}]"
+                    , size, size1, size2, saveAlarmCount.get(), processedSignalCount.get(), saveSignalCount.get());
         }, period, period, TimeUnit.SECONDS);
 
 
         AtomicBoolean stop = new AtomicBoolean(false);
-
-
-        ArrayBlockingQueue<Map<String, String>> alarmQueue = new ArrayBlockingQueue<>(5000);
-        ArrayBlockingQueue<String> signalQueue = new ArrayBlockingQueue<>(5000);
         ExecutorService alarmPool = Executors.newSingleThreadExecutor();
-        ExecutorService signalPool = Executors.newSingleThreadExecutor();
+        ThreadPoolExecutor signalProcessPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() + 1);
+        ExecutorService signalSavePool = Executors.newSingleThreadExecutor();
+        ArrayBlockingQueue<String> signalSaveQueue = new ArrayBlockingQueue<>(10000);
         alarmPool.execute(() -> {
             String alarmFilePath = "alarm.txt";
+            Path alarmPath = Paths.get(alarmFilePath);
             try {
-                Files.deleteIfExists(Paths.get(alarmFilePath));
-                Files.createFile(Paths.get(alarmFilePath));
+                Files.deleteIfExists(alarmPath);
+                Files.createFile(alarmPath);
             } catch (IOException e) {
                 throw BaseRuntimeException.getException(e);
             }
-            try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(alarmFilePath))) {
-                while (!stop.get()) {
-                    Map<String, String> data = alarmQueue.poll(3, TimeUnit.SECONDS);
+            try (BufferedWriter bw = Files.newBufferedWriter(alarmPath)) {
+                for (Map<String, String> data : alarmList1) {
                     if (data != null) {
                         bw.write(JsonUtil.toJson(data));
                         bw.newLine();
@@ -224,167 +247,103 @@ public class MlService {
                         saveAlarmCount.incrementAndGet();
                     }
                 }
-
-            } catch (IOException | InterruptedException e) {
-                throw BaseRuntimeException.getException(e);
-            }
-        });
-
-        signalPool.execute(() -> {
-            String signalsFilePath = "signal.txt";
-            try {
-                Files.deleteIfExists(Paths.get(signalsFilePath));
-                Files.createFile(Paths.get(signalsFilePath));
             } catch (IOException e) {
                 throw BaseRuntimeException.getException(e);
             }
-            try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(signalsFilePath))) {
+        });
+
+        signalSavePool.execute(() -> {
+            String signalsFilePath = "signal.txt";
+            Path signalPath = Paths.get(signalsFilePath);
+            try {
+                Files.deleteIfExists(signalPath);
+                Files.createFile(signalPath);
+            } catch (IOException e) {
+                throw BaseRuntimeException.getException(e);
+            }
+            try (BufferedWriter bw = Files.newBufferedWriter(signalPath)) {
                 while (!stop.get()) {
-                    String signalJsonStr = signalQueue.poll(3, TimeUnit.SECONDS);
-                    if (signalJsonStr != null) {
-                        bw.write(signalJsonStr);
+                    final String signalJson = signalSaveQueue.poll(1, TimeUnit.SECONDS);
+                    if (signalJson != null) {
+                        bw.write(signalJson);
                         bw.newLine();
                         bw.flush();
-                        saveSignalCount.addAndGet(30);
+                        saveSignalCount.incrementAndGet();
                     }
                 }
-
             } catch (IOException | InterruptedException e) {
                 throw BaseRuntimeException.getException(e);
             }
         });
 
-
-        //检测重复的alarm
-        Set<String> set1 = new HashSet<>();
-        //检测相同vin和time、但是不同type的 alarm
-        Map<String, Integer> map2 = new ConcurrentHashMap<>();
-        //检测重复的signal
-        Set<String> set3 = ConcurrentHashMap.newKeySet();
-
-        ArrayBlockingQueue<Map<String, String>> workQueue = new ArrayBlockingQueue<>(5000);
-        ExecutorService[] workPools = new ExecutorService[workPoolSize];
-        for (int i = 0; i < workPools.length; i++) {
-            workPools[i] = Executors.newSingleThreadExecutor();
-            workPools[i].execute(() -> {
-                try {
-                    while (!stop.get()) {
-                        Map<String, String> alarm = workQueue.poll(3, TimeUnit.SECONDS);
-                        if (alarm != null) {
-                            String vin = alarm.get("vin");
-                            String beginTime = alarm.get("beginTime");
-                            String alarmType = alarm.get("alarmType");
-                            String platformCode = alarm.get("platformCode");
-                            Date alarmTime = DateZoneUtil.stringToDate_second(beginTime);
-                            LocalDateTime ldt = LocalDateTime.ofInstant(alarmTime.toInstant(), zoneOffset);
-                            Date d1 = Date.from(ldt.plusSeconds(-alarmTimeOffset).toInstant(zoneOffset));
-                            Date d2 = Date.from(ldt.plusSeconds(alarmTimeOffset).toInstant(zoneOffset));
-                            List<String[]> signals = HBaseUtil.querySignals(vin, d1, d2);
-                            int signalSize = signals.size();
-                            String key1 = vin + "-" + beginTime + "-" + alarmType + "-" + platformCode;
-                            String key2 = vin + "-" + beginTime;
-                            Integer old = map2.putIfAbsent(key2, signalSize);
-                            if (old == null) {
-                                if (signalSize > 0) {
-                                    processedAlarmCount.incrementAndGet();
-                                    alarmQueue.put(alarm);
-                                    for (String[] arr : signals) {
-                                        String signalTime = arr[0].substring(29, 43);
-                                        String signalJson = arr[1];
-                                        String key3 = vin + "-" + signalTime;
+        final Set<String> set3 = ConcurrentHashMap.newKeySet();
+        final int maximumPoolSize = signalProcessPool.getMaximumPoolSize();
+        final int avg = alarmList2.size() / maximumPoolSize;
+        final int leave = alarmList2.size() % maximumPoolSize;
+        for (int i = 0; i < maximumPoolSize; i++) {
+            final List<Map<String, String>> subList;
+            if (i == 0) {
+                subList = alarmList2.subList(0, avg + leave);
+            } else {
+                subList = alarmList2.subList(avg * i + leave, avg * (i + 1) + leave);
+            }
+            if(!subList.isEmpty()){
+                signalProcessPool.execute(() -> {
+                    for (Map<String, String> alarm : subList) {
+                        String vin = alarm.get("vin");
+                        String beginTime = alarm.get("beginTime");
+                        Date alarmTime = DateZoneUtil.stringToDate_second(beginTime);
+                        LocalDateTime ldt = LocalDateTime.ofInstant(alarmTime.toInstant(), zoneOffset);
+                        Date d1 = Date.from(ldt.plusSeconds(-alarmTimeOffset).toInstant(zoneOffset));
+                        Date d2 = Date.from(ldt.plusSeconds(alarmTimeOffset).toInstant(zoneOffset));
+                        List<String[]> signals = HBaseUtil.querySignals(vin, d1, d2);
+                        try {
+                            for (String[] arr : signals) {
+                                String signalTime = arr[0].substring(29, 43);
+                                String signalJson = arr[1];
+                                String key3 = vin + "-" + signalTime;
+                                if (!set3.contains(key3)) {
+                                    synchronized (key3.intern()) {
                                         if (!set3.contains(key3)) {
-                                            synchronized (key3.intern()) {
-                                                if (set3.contains(key3)) {
-                                                    continue;
-                                                } else {
-                                                    set3.add(key3);
-                                                }
-                                            }
-                                            processedSignalCount.addAndGet(30);
-                                            signalQueue.put(signalJson);
+                                            set3.add(key3);
+                                            signalSaveQueue.put(signalJson);
                                         }
                                     }
-                                } else {
-                                    logger.info("no signal alarm[{}}]", key1);
+
                                 }
-                            } else {
-                                if (old > 0) {
-                                    processedAlarmCount.incrementAndGet();
-                                    alarmQueue.put(alarm);
-                                } else {
-                                    logger.info("no signal alarm[{}] in map2", key1);
-                                }
+                                processedSignalCount.incrementAndGet();
                             }
+                        } catch (InterruptedException ex) {
+                            throw BaseRuntimeException.getException(ex);
                         }
                     }
-                } catch (InterruptedException e) {
-                    throw BaseRuntimeException.getException(e);
-                }
-            });
-        }
-
-
-        //split alarm
-        Iterator<Map<String, String>> it = alarmList.iterator();
-        while (it.hasNext()) {
-            try {
-                Map<String, String> alarm = it.next();
-                String vin = alarm.get("vin");
-                String beginTime = alarm.get("beginTime");
-                String alarmType = alarm.get("alarmType");
-                String platformCode = alarm.get("platformCode");
-                String key1 = vin + "-" + beginTime + "-" + alarmType + "-" + platformCode;
-                if (!set1.contains(key1)) {
-                    set1.add(key1);
-                    String key2 = vin + "-" + beginTime;
-                    Integer val2 = map2.get(key2);
-                    if (val2 == null) {
-                        workQueue.put(alarm);
-                    } else {
-                        if (val2 > 0) {
-                            processedAlarmCount.incrementAndGet();
-                            alarmQueue.put(alarm);
-                        } else {
-                            logger.info("no signal alarm[{}] in map2", key1);
-                        }
-                    }
-                } else {
-                    logger.info("duplicate alarm[{}]", key1);
-                }
-            } catch (InterruptedException e) {
-                logger.error("parse alarm error", e);
+                });
             }
-            it.remove();
         }
 
 
         try {
-            while (!workQueue.isEmpty()) {
-                TimeUnit.SECONDS.sleep(1);
-            }
-            while (!alarmQueue.isEmpty()) {
-                TimeUnit.SECONDS.sleep(1);
-            }
-            while (!signalQueue.isEmpty()) {
-                TimeUnit.SECONDS.sleep(1);
-            }
-            stop.set(true);
-            for (ExecutorService workPool : workPools) {
-                workPool.shutdown();
-            }
+            //关闭报警线程池
             alarmPool.shutdown();
-            signalPool.shutdown();
-            for (ExecutorService workPool : workPools) {
-                while (!workPool.awaitTermination(60, TimeUnit.SECONDS)) {
-
-                }
-            }
             while (!alarmPool.awaitTermination(60, TimeUnit.SECONDS)) {
 
             }
-            while (!signalPool.awaitTermination(60, TimeUnit.SECONDS)) {
+            //关闭信号处理线程池
+            signalProcessPool.shutdown();
+            while (!signalProcessPool.awaitTermination(60, TimeUnit.SECONDS)) {
 
             }
+            //等待信号保存队列空
+            while(!signalSaveQueue.isEmpty()){
+                TimeUnit.SECONDS.sleep(1);
+            }
+            //关闭信号保存线程池
+            stop.set(true);
+            signalSavePool.shutdown();
+            while (!signalSavePool.awaitTermination(60, TimeUnit.SECONDS)) {
+
+            }
+            //关闭监控线程池
             monitorPool.shutdown();
             while (!monitorPool.awaitTermination(60, TimeUnit.SECONDS)) {
 
@@ -555,7 +514,7 @@ public class MlService {
         return count.get();
     }
 
-    enum Match{
+    enum Match {
         equals,
         contains
     }
@@ -584,9 +543,9 @@ public class MlService {
             List<CheckRes> checkResList = new ArrayList<>();
             checkResList.add(new CheckRes(Match.contains, 1, "真报警", "真实报警", "真实故障", "真是报警"));
             checkResList.add(new CheckRes(Match.contains, 0, "误报警"));
-            checkResList.add(new CheckRes(Match.equals, 0, "正常使用中","正常行驶中"));
-            checkResList.add(new CheckRes(Match.contains, 1, "已开救援工单","已被救援","救援跟进","开具救援","维修中报警","实施救援","上报维修案例","上报案例维修","协调车辆进站","更换模组","维修绝缘问题","开展维修","车辆已报废","确认故障","已经往修理厂拖了","拖去维修厂","上门拖车","已报修","已拖车","拖车进站处理","维修中误触发","正在维修","拖车进站","站内维修","检测维修","进行维修","进行修理","在外维修","外面修理站维修","非授权店维修","外面修理厂维修","模拟触发报警演练","安全风险解除","维修时误触发"));
-            checkResList.add(new CheckRes(Match.contains, 0, "误触发","慢充桩绝缘问题","车辆快充时触发","快充桩绝缘引发","慢充桩导致","快充引发绝缘","充电桩引发","快充桩引发","慢充桩引发","信号跳变","信号间歇性跳变","数据跳变","误操作","无安全风险","客户表示车辆正常"));
+            checkResList.add(new CheckRes(Match.equals, 0, "正常使用中", "正常行驶中"));
+            checkResList.add(new CheckRes(Match.contains, 1, "已开救援工单", "已被救援", "救援跟进", "开具救援", "维修中报警", "实施救援", "上报维修案例", "上报案例维修", "协调车辆进站", "更换模组", "维修绝缘问题", "开展维修", "车辆已报废", "确认故障", "已经往修理厂拖了", "拖去维修厂", "上门拖车", "已报修", "已拖车", "拖车进站处理", "维修中误触发", "正在维修", "拖车进站", "站内维修", "检测维修", "进行维修", "进行修理", "在外维修", "外面修理站维修", "非授权店维修", "外面修理厂维修", "模拟触发报警演练", "安全风险解除", "维修时误触发"));
+            checkResList.add(new CheckRes(Match.contains, 0, "误触发", "慢充桩绝缘问题", "车辆快充时触发", "快充桩绝缘引发", "慢充桩导致", "快充引发绝缘", "充电桩引发", "快充桩引发", "慢充桩引发", "信号跳变", "信号间歇性跳变", "数据跳变", "误操作", "无安全风险", "客户表示车辆正常"));
 
 //            checkResList.add(new CheckRes(Match.contains, 0, "无安全风险"));
 
@@ -611,7 +570,7 @@ public class MlService {
                 }
                 final JsonNode handlerstatusJsonNode = JsonUtil.GLOBAL_OBJECT_MAPPER.readTree(handlerstatus);
                 final JsonNode lastIssueJsonNode = issueJsonNode.get(issueJsonNode.size() - 1);
-                if(lastIssueJsonNode==null){
+                if (lastIssueJsonNode == null) {
                     lineList.remove(i);
                     i--;
                     continue;
