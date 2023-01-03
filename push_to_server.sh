@@ -1,0 +1,1 @@
+rsync -avz --exclude={.idea,.gradle,build,logs,*.log,temp,.git} /Users/baichangda/bcd/workspace/ml-alarm-data-collect incar@10.0.11.50:/app/project
