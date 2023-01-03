@@ -48,6 +48,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.zip.GZIPInputStream;
 
 @Service
 public class MlService {
@@ -425,63 +427,135 @@ public class MlService {
         return vinToVehicleType;
     }
 
-    public int saveToMongo_gb_targz(String tarFilePath, String collection) {
+    public long saveToMongo_gb_gz(String gzDir, String collection, String startDay, String endDay) {
+        final Date startDate;
+        if (Strings.isNullOrEmpty(startDay)) {
+            startDate = null;
+        } else {
+            startDate = DateZoneUtil.stringToDate_day(startDay);
+        }
+        final Date endDate;
+        if (Strings.isNullOrEmpty(endDay)) {
+            endDate = null;
+        } else {
+            endDate = DateZoneUtil.stringToDate_day(endDay);
+        }
 
         mongoTemplate.dropCollection(collection);
 
-        final AtomicInteger insertCount = new AtomicInteger();
+
+        //遍历文件
+        final List<Path> pathList;
+        try (final Stream<Path> pathStream = Files.list(Paths.get(gzDir))) {
+            pathList = pathStream.filter(e -> {
+                final String fileName = e.getFileName().toString();
+                return fileName.endsWith(".gz");
+            }).collect(Collectors.toList());
+        } catch (IOException ex) {
+            throw BaseRuntimeException.getException(ex);
+        }
+        logger.info("gz file count[{}]", pathList.size());
+
+
+        final AtomicLong processCount = new AtomicLong();
+        final AtomicLong insertCount = new AtomicLong();
+        final AtomicInteger index = new AtomicInteger(0);
+
+        //监控
         final ScheduledExecutorService monitorPool = Executors.newSingleThreadScheduledExecutor();
         monitorPool.scheduleAtFixedRate(() -> {
-            logger.info("insert count[{}]", insertCount.get());
+            logger.info("file[{}] process[{}] insert[{}]", index.get(), processCount.get(), insertCount.get());
         }, 3, 3, TimeUnit.SECONDS);
 
+        //工作线程
+        final int total = pathList.size();
+
+        final int workPoolSize = Runtime.getRuntime().availableProcessors();
+        final ExecutorService workPool = Executors.newFixedThreadPool(workPoolSize);
+        final AtomicBoolean finish = new AtomicBoolean(false);
+        final ArrayBlockingQueue<Map<String, Object>> saveQueue = new ArrayBlockingQueue<>(100000);
         final String target = "\"message\":\"";
-        try (InputStream in = Files.newInputStream(Paths.get(tarFilePath));
-             GzipCompressorInputStream gzi = new GzipCompressorInputStream(in);
-             TarArchiveInputStream ti = new TarArchiveInputStream(gzi)) {
-            while (ti.getNextEntry() != null) {
-                byte[] temp = new byte[ti.available()];
-                ti.read(temp);
-                try (final ByteArrayInputStream bis = new ByteArrayInputStream(temp);
-                     GzipCompressorInputStream gis = new GzipCompressorInputStream(bis);
-                     BufferedReader br = new BufferedReader(new InputStreamReader(gis))) {
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        final int start = line.indexOf(target) + target.length();
-                        final int end = line.indexOf("\"", start);
-                        final String hexStr = line.substring(start, end);
-                        byte[] bytes = ByteBufUtil.decodeHexDump(hexStr);
-                        ByteBuf byteBuf = Unpooled.wrappedBuffer(bytes);
-                        final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
-                        PacketData packetData = packet.getData();
-                        String vin = packet.getVin();
-                        Date collectTime;
-                        VehicleCommonData vehicleCommonData;
-                        if (packetData instanceof VehicleRealData) {
-                            vehicleCommonData = ((VehicleRealData) packetData).getVehicleCommonData();
-                            collectTime = ((VehicleRealData) packetData).getCollectTime();
-                        } else if (packetData instanceof VehicleSupplementData) {
-                            vehicleCommonData = ((VehicleSupplementData) packetData).getVehicleCommonData();
-                            collectTime = ((VehicleSupplementData) packetData).getCollectTime();
+        for (int i = 0; i < workPoolSize; i++) {
+            workPool.execute(() -> {
+                try {
+                    int no;
+                    while ((no = index.getAndIncrement()) < total) {
+                        final Path path = pathList.get(no);
+                        try (BufferedReader br = new BufferedReader(new InputStreamReader(new GZIPInputStream(Files.newInputStream(path))))) {
+                            String line;
+                            while ((line = br.readLine()) != null) {
+                                final int start = line.indexOf(target) + target.length();
+                                final int end = line.indexOf("\"", start);
+                                final String hexStr = line.substring(start, end);
+                                byte[] bytes = ByteBufUtil.decodeHexDump(hexStr);
+                                ByteBuf byteBuf = Unpooled.wrappedBuffer(bytes);
+                                final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
+                                PacketData packetData = packet.getData();
+                                String vin = packet.getVin();
+                                Date collectTime;
+                                VehicleCommonData vehicleCommonData;
+                                if (packetData instanceof VehicleRealData) {
+                                    vehicleCommonData = ((VehicleRealData) packetData).getVehicleCommonData();
+                                    collectTime = ((VehicleRealData) packetData).getCollectTime();
+                                } else if (packetData instanceof VehicleSupplementData) {
+                                    vehicleCommonData = ((VehicleSupplementData) packetData).getVehicleCommonData();
+                                    collectTime = ((VehicleSupplementData) packetData).getCollectTime();
+                                } else {
+                                    logger.info("PacketData class is [{}],discard data[{}]", packetData.getClass().getName(), line);
+                                    continue;
+                                }
+
+                                processCount.incrementAndGet();
+
+                                if ((startDate == null || collectTime.after(startDate)) && (endDate == null || collectTime.before(endDate))) {
+                                    final Map<String, Object> saveMap = new HashMap<>();
+                                    saveMap.put("vin", vin);
+                                    saveMap.put("collectTime", collectTime);
+                                    saveMap.put("data", JsonUtil.GLOBAL_OBJECT_MAPPER.writeValueAsString(vehicleCommonData));
+                                    saveQueue.put(saveMap);
+                                }
+                            }
+                        }
+                    }
+                } catch (IOException | InterruptedException ex) {
+                    throw BaseRuntimeException.getException(ex);
+                }
+            });
+        }
+
+        //保存线程
+        final ExecutorService savePool = Executors.newSingleThreadExecutor();
+        savePool.execute(() -> {
+            long saveTs = 0;
+            final List<Map<String, Object>> saveList = new ArrayList<>();
+            try {
+                while (true) {
+                    final Map<String, Object> poll = saveQueue.poll(1, TimeUnit.SECONDS);
+                    if (poll == null) {
+                        if (finish.get()) {
+                            break;
                         } else {
-                            logger.info("PacketData class is [{}],discard data[{}]", packetData.getClass().getName(), line);
                             continue;
                         }
-
-                        final Map<String, Object> saveMap = new HashMap<>();
-                        saveMap.put("vin", vin);
-                        saveMap.put("collectTime", collectTime);
-                        saveMap.put("data", JsonUtil.GLOBAL_OBJECT_MAPPER.writeValueAsString(vehicleCommonData));
-                        mongoTemplate.insert(saveMap, collection);
-                        insertCount.incrementAndGet();
+                    }
+                    saveList.add(poll);
+                    final long ts = System.currentTimeMillis();
+                    final int size = saveList.size();
+                    if (size == 1000 || (ts - saveTs) >= 3000) {
+                        mongoTemplate.insert(saveList, collection);
+                        saveList.clear();
+                        saveTs = ts;
+                        insertCount.addAndGet(size);
                     }
                 }
+            } catch (InterruptedException ex) {
+                throw BaseRuntimeException.getException(ex);
             }
-        } catch (IOException e) {
-            throw BaseRuntimeException.getException(e);
-        } finally {
-            ExecutorUtil.shutdownThenAwaitOneByOne(monitorPool);
-        }
+        });
+
+        ExecutorUtil.shutdownThenAwaitOneByOne(workPool);
+        finish.set(true);
+        ExecutorUtil.shutdownThenAwaitOneByOne(savePool);
         return insertCount.get();
     }
 
