@@ -9,6 +9,7 @@ import com.bcd.base.util.JsonUtil;
 import com.bcd.base.support_hbase.HBaseUtil;
 import com.bcd.parser.impl.gb32960.Parser_gb32960;
 import com.bcd.parser.impl.gb32960.data.*;
+import com.bcd.parser.util.ExecutorUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -18,6 +19,10 @@ import com.google.common.collect.Sets;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
+import org.apache.commons.compress.archivers.ArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,10 +35,7 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.lang.reflect.Field;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.*;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -43,13 +45,14 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class MlService {
 
-    Logger logger = LoggerFactory.getLogger(MlService.class);
+    static Logger logger = LoggerFactory.getLogger(MlService.class);
 
     ZoneOffset zoneOffset = ZoneOffset.of("+8");
 
@@ -79,9 +82,9 @@ public class MlService {
 
     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("+8"));
 
-    Parser_gb32960 parser_gb32960 = new Parser_gb32960(false);
+    static Parser_gb32960 parser_gb32960 = new Parser_gb32960(false);
 
-    {
+    static {
         parser_gb32960.init();
     }
 
@@ -169,7 +172,7 @@ public class MlService {
      * @return
      */
     public int[] fetchAndSave(String alarmStartTimeStr, String alarmEndTimeStr) {
-        logger.info("start fetchAndSave[{}-{}]",alarmStartTimeStr,alarmEndTimeStr);
+        logger.info("start fetchAndSave[{}-{}]", alarmStartTimeStr, alarmEndTimeStr);
         long alarmStartTime = DateZoneUtil.stringToDate_day(alarmStartTimeStr).getTime();
         long alarmEndTime = DateZoneUtil.stringToDate_day(alarmEndTimeStr).getTime();
         List<Map<String, String>> alarmList = HBaseUtil.queryAlarms(e -> {
@@ -216,12 +219,13 @@ public class MlService {
 
         AtomicInteger processedSignalCount = new AtomicInteger();
         AtomicInteger saveAlarmCount = new AtomicInteger();
+        AtomicInteger missAlarmCount = new AtomicInteger();
         AtomicInteger saveSignalCount = new AtomicInteger();
         ScheduledExecutorService monitorPool = Executors.newScheduledThreadPool(1);
         int period = 5;
         monitorPool.scheduleWithFixedDelay(() -> {
-            logger.info("alarm[{}] alarm1[{}] alarm2[{}] saveAlarm[{}] processedSignal[{}] saveSignal[{}]"
-                    , size, size1, size2, saveAlarmCount.get(), processedSignalCount.get(), saveSignalCount.get());
+            logger.info("alarm[{}] alarm1[{}] alarm2[{}] saveAlarm[{}] missAlarm[{}] processedSignal[{}] saveSignal[{}]"
+                    , size, size1, size2, saveAlarmCount.get(), missAlarmCount.get(), processedSignalCount.get(), saveSignalCount.get());
         }, period, period, TimeUnit.SECONDS);
 
 
@@ -288,8 +292,9 @@ public class MlService {
             } else {
                 subList = alarmList2.subList(avg * i + leave, avg * (i + 1) + leave);
             }
-            if(!subList.isEmpty()){
+            if (!subList.isEmpty()) {
                 signalProcessPool.execute(() -> {
+                    logger.info("-----------start fetch subList[{}] signal", subList.size());
                     for (Map<String, String> alarm : subList) {
                         String vin = alarm.get("vin");
                         String beginTime = alarm.get("beginTime");
@@ -298,6 +303,9 @@ public class MlService {
                         Date d1 = Date.from(ldt.plusSeconds(-alarmTimeOffset).toInstant(zoneOffset));
                         Date d2 = Date.from(ldt.plusSeconds(alarmTimeOffset).toInstant(zoneOffset));
                         List<String[]> signals = HBaseUtil.querySignals(vin, d1, d2);
+                        if (signals.size() < 2) {
+                            missAlarmCount.incrementAndGet();
+                        }
                         try {
                             for (String[] arr : signals) {
                                 String signalTime = arr[0].substring(29, 43);
@@ -335,7 +343,7 @@ public class MlService {
 
             }
             //等待信号保存队列空
-            while(!signalSaveQueue.isEmpty()){
+            while (!signalSaveQueue.isEmpty()) {
                 TimeUnit.SECONDS.sleep(1);
             }
             //关闭信号保存线程池
@@ -417,10 +425,68 @@ public class MlService {
         return vinToVehicleType;
     }
 
+    public int saveToMongo_gb_targz(String tarFilePath, String collection) {
+
+        mongoTemplate.dropCollection(collection);
+
+        final AtomicInteger insertCount = new AtomicInteger();
+        final ScheduledExecutorService monitorPool = Executors.newSingleThreadScheduledExecutor();
+        monitorPool.scheduleAtFixedRate(() -> {
+            logger.info("insert count[{}]", insertCount.get());
+        }, 3, 3, TimeUnit.SECONDS);
+
+        final String target = "\"message\":\"";
+        try (InputStream in = Files.newInputStream(Paths.get(tarFilePath));
+             GzipCompressorInputStream gzi = new GzipCompressorInputStream(in);
+             TarArchiveInputStream ti = new TarArchiveInputStream(gzi)) {
+            while (ti.getNextEntry() != null) {
+                byte[] temp = new byte[ti.available()];
+                ti.read(temp);
+                try (final ByteArrayInputStream bis = new ByteArrayInputStream(temp);
+                     GzipCompressorInputStream gis = new GzipCompressorInputStream(bis);
+                     BufferedReader br = new BufferedReader(new InputStreamReader(gis))) {
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        final int start = line.indexOf(target) + target.length();
+                        final int end = line.indexOf("\"", start);
+                        final String hexStr = line.substring(start, end);
+                        byte[] bytes = ByteBufUtil.decodeHexDump(hexStr);
+                        ByteBuf byteBuf = Unpooled.wrappedBuffer(bytes);
+                        final Packet packet = parser_gb32960.parse(Packet.class, byteBuf);
+                        PacketData packetData = packet.getData();
+                        String vin = packet.getVin();
+                        Date collectTime;
+                        VehicleCommonData vehicleCommonData;
+                        if (packetData instanceof VehicleRealData) {
+                            vehicleCommonData = ((VehicleRealData) packetData).getVehicleCommonData();
+                            collectTime = ((VehicleRealData) packetData).getCollectTime();
+                        } else if (packetData instanceof VehicleSupplementData) {
+                            vehicleCommonData = ((VehicleSupplementData) packetData).getVehicleCommonData();
+                            collectTime = ((VehicleSupplementData) packetData).getCollectTime();
+                        } else {
+                            logger.info("PacketData class is [{}],discard data[{}]", packetData.getClass().getName(), line);
+                            continue;
+                        }
+
+                        final Map<String, Object> saveMap = new HashMap<>();
+                        saveMap.put("vin", vin);
+                        saveMap.put("collectTime", collectTime);
+                        saveMap.put("data", JsonUtil.GLOBAL_OBJECT_MAPPER.writeValueAsString(vehicleCommonData));
+                        mongoTemplate.insert(saveMap, collection);
+                        insertCount.incrementAndGet();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw BaseRuntimeException.getException(e);
+        } finally {
+            ExecutorUtil.shutdownThenAwaitOneByOne(monitorPool);
+        }
+        return insertCount.get();
+    }
+
     public int saveToMongo_gb() {
-
         Map<String, String> vinToVehicleType = initVinToVehicleType();
-
         AtomicInteger count = new AtomicInteger();
         AtomicInteger monitorCount = new AtomicInteger();
         ScheduledExecutorService monitorPool = Executors.newSingleThreadScheduledExecutor();
@@ -542,11 +608,11 @@ public class MlService {
                     "platform_name", "saleStatus", "issue", "handleruser", "handlertime", "handlerstatus", "is_alarm"};
 
             List<CheckRes> checkResList = new ArrayList<>();
-            checkResList.add(new CheckRes(Match.contains, 1, "真报警", "真实报警", "真实故障", "真是报警","实报警","真实报价"));
-            checkResList.add(new CheckRes(Match.contains, 0, "误报警","加报警"));
-            checkResList.add(new CheckRes(Match.equals, 0, "正常使用中", "正常行驶中"));
-            checkResList.add(new CheckRes(Match.contains, 1, "已开救援工单", "已被救援", "救援跟进", "开具救援", "维修中报警", "实施救援", "上报维修案例", "上报案例维修", "协调车辆进站", "更换模组", "维修绝缘问题", "开展维修", "车辆已报废", "确认故障", "已经往修理厂拖了", "拖去维修厂", "上门拖车", "已报修", "已拖车", "拖车进站处理", "维修中误触发", "正在维修", "拖车进站", "站内维修", "检测维修", "进行维修", "进行修理", "在外维修", "外面修理站维修", "非授权店维修", "外面修理厂维修", "模拟触发报警演练", "安全风险解除", "维修时误触发","维修中","在非指定维修站维修","抢修工单处理","客户表示车辆故障","联系客户抢修处理","自己已安排了救援"));
-            checkResList.add(new CheckRes(Match.contains, 0, "误触发", "慢充桩绝缘问题", "车辆快充时触发", "快充桩绝缘引发", "慢充桩导致", "快充引发绝缘", "充电桩引发", "快充桩引发", "慢充桩引发", "信号跳变", "信号间歇性跳变", "数据跳变", "误操作", "无安全风险", "客户表示车辆正常","慢充操作导致"));
+            checkResList.add(new CheckRes(Match.contains, 1, "真报警", "真实报警", "真实故障", "真是报警", "实报警", "真实报价"));
+            checkResList.add(new CheckRes(Match.contains, 0, "误报警", "加报警", "假报警"));
+            checkResList.add(new CheckRes(Match.equals, 0, "正常使用中", "正常行驶中", "行驶无异常"));
+            checkResList.add(new CheckRes(Match.contains, 1, "修理厂维修", "在站维修", "准备维修", "其称车辆故障", "已进站维修", "售后服务中心维修", "400已开案例", "已开救援工单", "已被救援", "救援跟进", "开具救援", "实施救援", "上报维修案例", "上报案例维修", "协调车辆进站", "更换模组", "维修绝缘问题", "开展维修", "车辆已报废", "确认故障", "已经往修理厂拖了", "拖去维修厂", "上门拖车", "已报修", "已拖车", "拖车进站处理", "正在维修", "拖车进站", "站内维修", "检测维修", "进行维修", "进行修理", "在外维修", "外面修理站维修", "非授权店维修", "站点维修", "外面修理厂维修", "模拟触发报警演练", "安全风险解除", "维修中", "在非指定维修站维修", "抢修工单处理", "客户表示车辆故障", "联系客户抢修处理", "自己已安排了救援"));
+            checkResList.add(new CheckRes(Match.contains, 0, "误触发", "快充装引发绝缘", "慢充桩绝缘问题", "车辆快充时触发", "快充桩绝缘引发", "慢充桩导致", "快充引发绝缘", "充电桩引发", "快充桩引发", "慢充桩引发", "信号跳变", "信号间歇性跳变", "数据跳变", "误操作", "无安全风险", "客户表示车辆正常", "慢充操作导致", "维修中误触发", "维修时误触发", "维修中报警"));
 
 //            checkResList.add(new CheckRes(Match.contains, 0, "无安全风险"));
 

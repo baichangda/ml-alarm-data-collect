@@ -50,8 +50,18 @@ public class MlController extends BaseController {
     @RequestMapping(value = "/saveToMongo_gb", method = RequestMethod.GET)
     @Operation(description = "解析数据文件保存到mongo")
     @ApiResponse(responseCode = "200", description = "解析数据文件保存到mongo")
-    public JsonMessage<Integer> saveToMongo(){
+    public JsonMessage<Integer> saveToMongo_gb(){
         return JsonMessage.success(mlService.saveToMongo_gb());
+    }
+
+    @RequestMapping(value = "/saveToMongo_gb_targz", method = RequestMethod.GET)
+    @Operation(description = "解析tar数据文件保存到mongo")
+    @ApiResponse(responseCode = "200", description = "解析tar数据文件保存到mongo")
+    public JsonMessage<Integer> saveToMongo_gb_targz(
+            @RequestParam String tarFilePath,
+            @RequestParam String collection
+    ){
+        return JsonMessage.success(mlService.saveToMongo_gb_targz(tarFilePath,collection));
     }
 
 

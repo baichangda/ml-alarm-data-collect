@@ -7,7 +7,7 @@ buildscript {
         springdocVersion = '+'
         caffeineVersion = '2.+'
         easyexcelVersion='+'
-        springBootVersion = '+'
+        springBootVersion = '2.+'
         lombokVersion = "+"
         nettyVersion = '4.+'
         jsqlparserVersion='+'

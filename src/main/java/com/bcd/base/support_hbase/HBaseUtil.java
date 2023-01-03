@@ -47,13 +47,25 @@ public class HBaseUtil {
     private static DateTimeFormatter dtf2 = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.of("+8"));
     private static String json = "saic:json_";
 
+    private static Map<String, String> tableReplaceMap = new HashMap<>();
+
     public HBaseUtil(@Value("${hbase.zookeeper.quorum}") String zookeeper,
-                     @Value("${hbase.zookeeper.property.clientPort}") String port) {
+                     @Value("${hbase.zookeeper.property.clientPort}") String port,
+                     @Value("${tableReplace}") String tableReplace) {
         try {
             configuration = HBaseConfiguration.create();
             configuration.set("hbase.zookeeper.quorum", zookeeper);
             configuration.set("hbase.zookeeper.property.clientPort", port);
             connection = ConnectionFactory.createConnection(configuration, hbasePool);
+            final String trim;
+            if (tableReplace != null && !(trim = tableReplace.trim()).equals("")) {
+                final String[] split = trim.split(";");
+                for (String s : split) {
+                    final String[] strings = s.split(",");
+                    tableReplaceMap.put(strings[0], strings[1]);
+                }
+            }
+
         } catch (IOException e) {
             throw BaseRuntimeException.getException(e);
         }
@@ -70,10 +82,10 @@ public class HBaseUtil {
         return connection.getTable(TableName.valueOf(tableName), hbasePool);
     }
 
-    public static List<Map<String,String>> queryAlarms(Predicate<Map<String,String>> predicate) {
+    public static List<Map<String, String>> queryAlarms(Predicate<Map<String, String>> predicate) {
         Scan scan = new Scan();
         scan.setCaching(3000);
-        return queryDataMap(ALARM_TABLE, scan,predicate);
+        return queryDataMap(ALARM_TABLE, scan, predicate);
     }
 
     public static List<String[]> querySignals(String vin, Date startTime, Date endTime) {
@@ -81,15 +93,21 @@ public class HBaseUtil {
         //根据时间获取表名
         String table = TELEMETRY_JSON;
         Long tboxTime = startTime.getTime() / 1000;
-        if(tboxTime >= jsonTime){
+        if (tboxTime >= jsonTime) {
             table = makeJsonTable(tboxTime);
         }
+
+        final String replace = tableReplaceMap.get(table);
+        if (replace != null) {
+            table = replace;
+        }
+
         return queryJsonData(vin, startTime, endTime, table);
     }
 
 
-    public static void querySignals_gb(Function<Map<String,String>,Boolean> function){
-        queryData(null, null, DELIVERY_TABLE_NAME, null, false,function);
+    public static void querySignals_gb(Function<Map<String, String>, Boolean> function) {
+        queryData(null, null, DELIVERY_TABLE_NAME, null, false, function);
     }
 
 
@@ -101,7 +119,7 @@ public class HBaseUtil {
      * @return
      */
     public static String makeDeliveryMessageMinRowKey(String vin, String collectDate) {
-        if (StringUtils.isBlank(vin)||StringUtils.isBlank(collectDate)) {
+        if (StringUtils.isBlank(vin) || StringUtils.isBlank(collectDate)) {
             throw new IllegalArgumentException("param error");
         }
 
@@ -145,11 +163,11 @@ public class HBaseUtil {
 
             for (Result r : rs) {
                 for (Cell cell : r.listCells()) {
-                    String key=((NoTagsKeyValue) cell).getKeyString();
+                    String key = ((NoTagsKeyValue) cell).getKeyString();
                     String jsonString = Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
                     if (StringUtils.isNotBlank(jsonString)) {
                         try {
-                            dataList.add(new String[]{key,jsonString});
+                            dataList.add(new String[]{key, jsonString});
                         } catch (Exception e) {
                             e.printStackTrace();
                             logger.error("数据转换异常:{0}", jsonString);
@@ -180,31 +198,31 @@ public class HBaseUtil {
      * @date 2018/10/23 10:13
      * @since 1.0.0
      */
-    private static List<Map<String,String>> queryDataMap(String tableName, Scan scan,Predicate<Map<String,String>> predicate) {
+    private static List<Map<String, String>> queryDataMap(String tableName, Scan scan, Predicate<Map<String, String>> predicate) {
         ResultScanner rs = null;
         // 获取表
         Table table = null;
-        List<Map<String,String>> dataList = new ArrayList<>();
+        List<Map<String, String>> dataList = new ArrayList<>();
         try {
             table = getTable(tableName);
             rs = table.getScanner(scan);
 
             for (Result r : rs) {
-                Map<String,String> data=new HashMap<>();
-                data.put("rowKey",Bytes.toString(r.getRow()));
+                Map<String, String> data = new HashMap<>();
+                data.put("rowKey", Bytes.toString(r.getRow()));
                 for (Cell cell : r.listCells()) {
                     String column = Bytes.toString(cell.getQualifierArray(), cell.getQualifierOffset(), cell.getQualifierLength());
                     String jsonString = Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
                     if (StringUtils.isNotBlank(jsonString)) {
                         try {
-                            data.put(column,jsonString);
+                            data.put(column, jsonString);
                         } catch (Exception e) {
                             e.printStackTrace();
                             logger.error("数据转换异常:{}", jsonString);
                         }
                     }
                 }
-                if(predicate.test(data)){
+                if (predicate.test(data)) {
                     dataList.add(data);
                 }
             }
@@ -394,30 +412,30 @@ public class HBaseUtil {
     }
 
 
-    public static void queryData(String startRowKey, String endRowKey, String tableName, Integer pageSize, Boolean reverseOrder,Function<Map<String,String>,Boolean> function) {
+    public static void queryData(String startRowKey, String endRowKey, String tableName, Integer pageSize, Boolean reverseOrder, Function<Map<String, String>, Boolean> function) {
 
         Scan scan = new Scan();
         scan.setCaching(3000);
-        if(pageSize != null && pageSize > 0){
+        if (pageSize != null && pageSize > 0) {
             Filter filter = new PageFilter(pageSize);
             scan.setFilter(filter);
         }
 
-        if(reverseOrder != null && reverseOrder){
+        if (reverseOrder != null && reverseOrder) {
             scan.setReversed(reverseOrder);
 
-            if(StringUtils.isNoneBlank(startRowKey) && StringUtils.isNoneBlank(endRowKey)){
+            if (StringUtils.isNoneBlank(startRowKey) && StringUtils.isNoneBlank(endRowKey)) {
                 scan.setStartRow(Bytes.toBytes(endRowKey));
                 scan.setStopRow(Bytes.toBytes(startRowKey));
             }
-        }else{
-            if(StringUtils.isNoneBlank(startRowKey) && StringUtils.isNoneBlank(endRowKey)){
+        } else {
+            if (StringUtils.isNoneBlank(startRowKey) && StringUtils.isNoneBlank(endRowKey)) {
                 scan.setStartRow(Bytes.toBytes(startRowKey));
                 scan.setStopRow(Bytes.toBytes(endRowKey));
             }
         }
 
-        queryDataMap(tableName, scan,function);
+        queryDataMap(tableName, scan, function);
     }
 
     /**
@@ -431,7 +449,7 @@ public class HBaseUtil {
      * @date 2018/10/23 10:13
      * @since 1.0.0
      */
-    private static void queryDataMap(String tableName, Scan scan,Function<Map<String,String>,Boolean> function) {
+    private static void queryDataMap(String tableName, Scan scan, Function<Map<String, String>, Boolean> function) {
         ResultScanner rs = null;
         // 获取表
         Table table = null;
@@ -440,22 +458,22 @@ public class HBaseUtil {
             rs = table.getScanner(scan);
 
             for (Result r : rs) {
-                Map<String,String> data=new HashMap<>();
-                data.put("rowKey",Bytes.toString(r.getRow()));
+                Map<String, String> data = new HashMap<>();
+                data.put("rowKey", Bytes.toString(r.getRow()));
                 for (Cell cell : r.listCells()) {
                     String column = Bytes.toString(cell.getQualifierArray(), cell.getQualifierOffset(), cell.getQualifierLength());
                     String jsonString = Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
                     if (StringUtils.isNotBlank(jsonString)) {
                         try {
-                            data.put(column,jsonString);
+                            data.put(column, jsonString);
                         } catch (Exception e) {
                             e.printStackTrace();
                             logger.error("数据转换异常:{0}", jsonString);
                         }
                     }
                 }
-                boolean res=function.apply(data);
-                if (!res){
+                boolean res = function.apply(data);
+                if (!res) {
                     break;
                 }
             }
@@ -468,7 +486,6 @@ public class HBaseUtil {
         }
 
     }
-
 
 
 }

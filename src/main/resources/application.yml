@@ -67,3 +67,5 @@ signalSourcePath: signal.txt
 gb_signalSourcePath: signal_gb.txt
 vehicleInfoPath: /Users/baichangda/Downloads/vehicleInfo.xlsx
 vehicleInfoPwd: bwwbn@rvm
+
+tableReplace: saic:json_09m,saic:json_recover
