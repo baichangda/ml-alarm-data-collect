@@ -555,7 +555,7 @@ public class MlService {
 
         ExecutorUtil.shutdownThenAwaitOneByOne(workPool);
         finish.set(true);
-        ExecutorUtil.shutdownThenAwaitOneByOne(savePool);
+        ExecutorUtil.shutdownThenAwaitOneByOne(savePool, monitorPool);
         return insertCount.get();
     }
 
