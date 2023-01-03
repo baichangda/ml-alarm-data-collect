@@ -98,6 +98,4 @@ public class VehicleCommonData {
     public void setVehicleStorageTemperatureData(VehicleStorageTemperatureData vehicleStorageTemperatureData) {
         this.vehicleStorageTemperatureData = vehicleStorageTemperatureData;
     }
-
-
 }
